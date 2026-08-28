@@ -4,6 +4,8 @@ out/
 .env*.local
 .env
 .neon
+.vercel/
 .agents/
 drizzle/meta/
 *.log
+.vercel
