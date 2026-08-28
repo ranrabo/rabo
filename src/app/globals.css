@@ -1,0 +1,39 @@
+@import "tailwindcss";
+
+:root {
+  --paper: #f5f3ec;
+  --paper-deep: #eae8df;
+  --ink: #142026;
+  --slate: #102a33;
+  --aqua: #69d3c6;
+  --coral: #ff7452;
+  --periwinkle: #b9c6ff;
+}
+
+@theme inline {
+  --color-paper: var(--paper);
+  --color-paper-deep: var(--paper-deep);
+  --color-ink: var(--ink);
+  --color-slate: var(--slate);
+  --color-aqua: var(--aqua);
+  --color-coral: var(--coral);
+  --color-periwinkle: var(--periwinkle);
+  --font-display: "Space Grotesk", ui-sans-serif, sans-serif;
+  --font-body: "DM Sans", ui-sans-serif, sans-serif;
+}
+
+* { box-sizing: border-box; }
+html { background: var(--paper); }
+body { margin: 0; background: var(--paper); color: var(--ink); font-family: "DM Sans", ui-sans-serif, sans-serif; }
+a { color: inherit; text-decoration: none; }
+button, a, input, select, textarea { -webkit-tap-highlight-color: transparent; }
+:focus-visible { outline: 2px solid var(--aqua); outline-offset: 3px; }
+
+.grid-paper { background-image: linear-gradient(to right, rgba(20,32,38,.06) 1px, transparent 1px), linear-gradient(to bottom, rgba(20,32,38,.06) 1px, transparent 1px); background-size: 24px 24px; }
+.hairline { border-color: rgba(20,32,38,.14); }
+.display { font-family: "Space Grotesk", ui-sans-serif, sans-serif; letter-spacing: -.045em; }
+.safe-bottom { padding-bottom: max(1.25rem, env(safe-area-inset-bottom)); }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { scroll-behavior: auto !important; transition-duration: .01ms !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; }
+}
