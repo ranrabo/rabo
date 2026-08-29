@@ -6,6 +6,7 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Check, ChevronLeft, ChevronRight, GripVertical, Pencil, Trash2, X } from "lucide-react";
 import type { PublicPerson, WeeklyBlock } from "@/db/schema";
 import { addDays, firstName, formatHours, formatTime, getMonday, toMinutes, WEEKDAYS } from "@/lib/utils";
+import { isTermDate, isTermOver, outOfTermReason } from "@/lib/term";
 import { quoteForDate } from "@/lib/quotes";
 import { addScheduleBlock, clearAttendance, confirmAttendance, createWeeklyBlock, deleteWeeklyBlock, reorderPeople, saveAdminNote, updateWeeklyBlock } from "@/app/admin/actions";
 
@@ -175,7 +176,7 @@ function BlockBar({ entry, lane, laneCount, compact = false, vertical = false, h
   return <button type="button" onClick={() => onToggle(member.id)} aria-pressed={highlighted} aria-label={`Highlight ${firstName(member.fullName)}`} title={label} className="absolute z-[1] overflow-hidden rounded-[2px] border-l-[3px] px-2 py-1.5 text-left transition hover:z-10 hover:brightness-95" style={{ top, height, left, width, backgroundColor: highlighted ? highlightFill : restFill, borderLeftColor: highlighted ? highlightStroke : restStroke, boxShadow: highlighted ? `0 0 0 1px ${highlightStroke}` : undefined }}><span className={`block truncate font-display text-[11px] leading-tight ${nameTone(highlighted)} ${vertical ? "writing-mode-vertical [writing-mode:vertical-rl]" : ""}`}>{firstName(member.fullName)}</span>{vertical ? null : <span className="mt-1 block truncate text-[10px] font-medium text-ink/60">{formatTime(block.startTime)}–{formatTime(block.endTime)}</span>}</button>;
 }
 
-function DayTimeline({ entries, mobile = false, short = false, accent, currentTime, highlightedPeople, onToggle, edit, weekday }: { entries: BlockWithMember[]; mobile?: boolean; short?: boolean; accent: string; currentTime?: string; highlightedPeople: Set<number>; onToggle: (personId: number) => void; edit?: BarEditApi; weekday?: number }) {
+function DayTimeline({ entries, mobile = false, short = false, accent, currentTime, highlightedPeople, onToggle, edit, weekday, drawDisabled = false }: { entries: BlockWithMember[]; mobile?: boolean; short?: boolean; accent: string; currentTime?: string; highlightedPeople: Set<number>; onToggle: (personId: number) => void; edit?: BarEditApi; weekday?: number; drawDisabled?: boolean }) {
   const [draw, setDraw] = useState<{ start: number; end: number } | null>(null);
   const lanes: BlockWithMember[][] = [];
   const laneFor = new Map<number, number>();
@@ -197,7 +198,7 @@ function DayTimeline({ entries, mobile = false, short = false, accent, currentTi
   const verticalRule = `,repeating-linear-gradient(to right, ${wash(accent, .13)} 0 1px, transparent 1px ${columnRule}px)`;
   const plannerGrid = `linear-gradient(to bottom, ${wash(accent, .36)} 0 1px, transparent 1px),linear-gradient(to bottom, ${wash(accent, .22)} 0 1px, transparent 1px),linear-gradient(to bottom, ${wash(accent, .13)} 0 1px, transparent 1px)${verticalRule}`;
   const plannerSize = `100% calc(100% / 6),100% calc(100% / 12),100% calc(100% / 48),100% 100%`;
-  const canDraw = Boolean(edit && weekday);
+  const canDraw = Boolean(edit && weekday) && !drawDisabled;
   const minuteAt = (clientY: number, element: HTMLElement) => {
     const rect = element.getBoundingClientRect();
     return clampMin(snapMin(dayStart + ((clientY - rect.top) / rect.height) * daySpan), dayStart, dayEnd);
@@ -390,8 +391,9 @@ function AdminNote({ initial, onSave }: { initial: string; onSave: (body: string
   </div>;
 }
 
-function ScheduleControl({ people, selectedDateValue, selectedDay, dayEntries, onNotice, onSaved }: {
+function ScheduleControl({ people, today, selectedDateValue, selectedDay, dayEntries, onNotice, onSaved }: {
   people: PublicPerson[];
+  today: string;
   selectedDateValue: string;
   selectedDay: number;
   dayEntries: BlockWithMember[];
@@ -413,9 +415,14 @@ function ScheduleControl({ people, selectedDateValue, selectedDay, dayEntries, o
   const slots = useMemo(() => Array.from({ length: (19 - 7) * 4 + 1 }, (_, i) => toTime(7 * 60 + i * 15)), []);
   const dayText = new Date(`${selectedDateValue}T12:00:00`).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
   const removable = dayEntries.filter((entry) => entry.block.id > 0);
+  const dayInTerm = isTermDate(selectedDateValue);
+  const termOver = isTermOver(today);
+  const addBlocked = (scope === "day" && !dayInTerm) || (scope === "term" && termOver);
   const field = "border border-ink/15 bg-white px-2 py-1.5 font-display text-xs text-ink transition focus:border-ink/40 focus:outline-none";
 
   const add = () => {
+    if (scope === "day" && !dayInTerm) { onNotice(`Nobody is scheduled ${outOfTermReason(selectedDateValue)}.`); return; }
+    if (scope === "term" && termOver) { onNotice("The term is over — nothing left to schedule."); return; }
     if (isNew && !newName.trim()) { onNotice("Enter a name for the new person."); return; }
     if (toMinutes(end) <= toMinutes(start)) { onNotice("End time must be after the start time."); return; }
     const form = new FormData();
@@ -478,10 +485,11 @@ function ScheduleControl({ people, selectedDateValue, selectedDay, dayEntries, o
           </div>
         </div>
         <div className="space-y-1 pt-0.5">
-          <label className="flex items-center gap-2 font-display text-[11px] text-ink/70"><input type="radio" name="schedule-scope" checked={scope === "day"} onChange={() => setScope("day")} className="accent-slate" /> {dayText} only</label>
-          <label className="flex items-center gap-2 font-display text-[11px] text-ink/70"><input type="radio" name="schedule-scope" checked={scope === "term"} onChange={() => setScope("term")} className="accent-slate" /> Every {WEEKDAYS[selectedDay]}, ongoing</label>
+          <label className={`flex items-center gap-2 font-display text-[11px] ${dayInTerm ? "text-ink/70" : "text-ink/35"}`}><input type="radio" name="schedule-scope" checked={scope === "day"} disabled={!dayInTerm} onChange={() => setScope("day")} className="accent-slate" /> {dayText} only{dayInTerm ? "" : " — not in session"}</label>
+          <label className={`flex items-center gap-2 font-display text-[11px] ${termOver ? "text-ink/35" : "text-ink/70"}`}><input type="radio" name="schedule-scope" checked={scope === "term"} disabled={termOver} onChange={() => setScope("term")} className="accent-slate" /> Every {WEEKDAYS[selectedDay]}, ongoing</label>
         </div>
-        <button type="button" disabled={busy} onClick={add} className="w-full bg-ink px-3 py-2 font-display text-[11px] font-bold uppercase tracking-[.12em] text-paper-deep transition hover:bg-slate disabled:opacity-50">Add block</button>
+        {addBlocked ? <p className="font-display text-[9px] leading-relaxed text-coral/80">{scope === "day" ? `${dayText} is ${outOfTermReason(selectedDateValue)}.` : "The term has ended."}</p> : null}
+        <button type="button" disabled={busy || addBlocked} onClick={add} className="w-full bg-ink px-3 py-2 font-display text-[11px] font-bold uppercase tracking-[.12em] text-paper-deep transition hover:bg-slate disabled:opacity-50">Add block</button>
       </div> : <div className="space-y-2.5">
         <div>
           <label className="mb-1 block font-display text-[10px] font-medium uppercase tracking-[.1em] text-ink/45">Block on {dayText}</label>
@@ -792,10 +800,18 @@ export function PublicBoard({ today, now, people, blocks, openSessions, attendan
   const dayEditApi = admin ? makeEditApi(false) : undefined;
   const weekEditApi = admin ? makeEditApi(true) : undefined;
 
-  const byDay = useMemo(() => WEEKDAYS.map((_, index) => boardBlocks.filter(({ block }) => block.weekday === index + 1)), [boardBlocks]);
+  // A day column shows blocks only if that calendar date is in term — outside
+  // the term windows nobody is scheduled, so the column renders empty.
+  const byDay = useMemo(() => {
+    const monday = getMonday(selectedDateValue);
+    return WEEKDAYS.map((_, index) => (
+      isTermDate(addDays(monday, index)) ? boardBlocks.filter(({ block }) => block.weekday === index + 1) : []
+    ));
+  }, [boardBlocks, selectedDateValue]);
   const selectedDate = new Date(`${selectedDateValue}T12:00:00`);
   const selectedDay = (selectedDate.getDay() + 6) % 7;
   const selectedWeekMonday = getMonday(selectedDateValue);
+  const dayInTerm = isTermDate(selectedDateValue);
   const dateLabel = (index: number) => new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric" }).format(new Date(dateForDay(index)));
   const fullDate = new Intl.DateTimeFormat("en-US", { month: "long", year: "numeric" }).format(selectedDate).toUpperCase();
   const currentEntries = byDay[selectedDay];
@@ -831,19 +847,20 @@ export function PublicBoard({ today, now, people, blocks, openSessions, attendan
       <div className="relative px-5 pb-8 sm:px-6">
         <button aria-label="Previous day" onClick={() => shiftSelectedDate(-1)} className="absolute left-1 top-1/2 z-10 flex h-10 w-10 -translate-y-1/2 items-center justify-center text-ink/35 transition hover:text-ink"><ChevronLeft size={21} strokeWidth={1.5} /></button><button aria-label="Next day" onClick={() => shiftSelectedDate(1)} className="absolute right-1 top-1/2 z-10 flex h-10 w-10 -translate-y-1/2 items-center justify-center text-ink/35 transition hover:text-ink"><ChevronRight size={21} strokeWidth={1.5} /></button>
         <span className="absolute right-0 top-[33%] z-10 flex h-11 w-11 items-center justify-center font-display text-xl font-extrabold" style={{ backgroundColor: monthAccent, color: "#FFFDF9" }} aria-label={`Month ${selectedMonth}`}>{selectedMonth}</span>
-        <div className="mx-0 grid w-full sm:w-[90%] grid-cols-[52px_16px_minmax(0,1fr)] sm:grid-cols-[82px_22px_minmax(0,1fr)]"><HourAxis /><DensityBand entries={currentEntries} color={monthAccent} /><div className="min-w-0"><DayTimeline entries={currentEntries} accent={monthAccent} currentTime={selectedDateValue === today ? clock : undefined} highlightedPeople={highlightedPeople} onToggle={togglePerson} edit={dayEditApi} weekday={selectedDay + 1} /></div></div>
+        {dayInTerm ? null : <p className="mb-3 text-center font-display text-[11px] font-bold uppercase tracking-[.14em] text-ink/40">Not in session · {outOfTermReason(selectedDateValue)}</p>}
+        <div className="mx-0 grid w-full sm:w-[90%] grid-cols-[52px_16px_minmax(0,1fr)] sm:grid-cols-[82px_22px_minmax(0,1fr)]"><HourAxis /><DensityBand entries={currentEntries} color={monthAccent} /><div className="min-w-0"><DayTimeline entries={currentEntries} accent={monthAccent} currentTime={selectedDateValue === today ? clock : undefined} highlightedPeople={highlightedPeople} onToggle={togglePerson} edit={dayEditApi} weekday={selectedDay + 1} drawDisabled={!dayInTerm} /></div></div>
       </div>
       {admin ? <div className="px-5 pt-8 sm:px-6">
         <div className="grid items-stretch gap-6 sm:ml-[104px] lg:grid-cols-2 lg:gap-8">
           <AdminNote initial={adminNote} onSave={saveNote} />
-          <ScheduleControl people={people} selectedDateValue={selectedDateValue} selectedDay={selectedDay} dayEntries={currentEntries} onNotice={setNotice} onSaved={() => router.refresh()} />
+          <ScheduleControl people={people} today={today} selectedDateValue={selectedDateValue} selectedDay={selectedDay} dayEntries={currentEntries} onNotice={setNotice} onSaved={() => router.refresh()} />
         </div>
       </div> : null}
       <DayExtras selectedDate={selectedDate} selectedDay={selectedDay} blocks={blocks} today={today} onSelectDate={(date) => setSelectedDateValue(date.toISOString().slice(0, 10))} />
       <section className="weekly-spread relative px-5 pb-10 pt-8 sm:px-10 sm:pt-10">
         <div className="mb-5 flex flex-wrap items-end justify-between gap-4"><div><p className="font-display text-[11px] font-bold tracking-[.18em] text-ink/55">THE WEEK</p><div className="mt-2 flex min-h-[128px] min-w-0 max-w-[480px] flex-col justify-between border border-[#EAEAEA] bg-[#FFFDF9] lg:ml-[52px]"><div className="flex flex-1 items-center justify-center px-4 py-5"><div className="grid w-full grid-cols-[minmax(0,0.72fr)_minmax(150px,1.6fr)_minmax(0,0.72fr)] border border-[#EAEAEA] font-display leading-none" style={{ color: monthAccent }}><div className="flex flex-col items-center justify-center border-r border-[#EAEAEA] px-2 py-4 sm:px-3"><span className="whitespace-nowrap text-[11px] font-bold tracking-[.12em]">{weekStartMonth}{weekStartMonth === weekEndMonth ? "" : `–${weekEndMonth}`}</span><span className="mt-2 whitespace-nowrap text-xs font-medium tracking-[.12em]">{weekStart.getFullYear()}</span></div><div className="flex min-w-0 items-center justify-center gap-2 border-r border-[#EAEAEA] px-2 py-3 text-[3.25rem] font-extrabold tracking-[-.06em] sm:px-4 sm:text-[4rem]"><span>{weekStart.getDate()}</span><span className="font-medium text-ink/30">–</span><span>{weekEnd.getDate()}</span></div><div className="flex flex-col items-center justify-center gap-2 px-2 py-4 text-ink/70 sm:px-4"><span className="whitespace-nowrap text-2xl font-extrabold sm:text-3xl">週</span><span className="whitespace-nowrap text-[11px] font-extrabold tracking-[.16em] text-ink/65 sm:text-xs">WEEK</span></div></div></div><div className="flex flex-wrap items-center justify-between gap-3 border-t border-[#EAEAEA] px-4 py-2.5 font-display text-[10px] font-medium tracking-[.14em] text-ink/45 sm:px-5"><span className="font-extrabold tracking-[.08em] text-ink/55">{dateLabel(0)} – {dateLabel(4)}</span><span>{fullDate}</span></div></div></div><div className="flex flex-wrap items-center gap-4 text-[11px] font-medium text-ink/55"><span className="flex items-center gap-1.5"><i className="h-2.5 w-4 border-t-[3px] border-ink bg-ink/10" /> booked</span><span className="flex items-center gap-1.5"><i className="h-2.5 w-4 border-t-[3px] border-coral bg-coral/15" /> in now</span><span className="flex items-center gap-1.5"><i className="h-2.5 w-4 border-t-[2px] border-dashed border-ink bg-ink/10" /> one-off</span></div></div>
         <div className="pointer-events-none absolute inset-x-0 top-[390px] z-10 hidden justify-between lg:flex"><button type="button" onClick={() => shiftSelectedDate(-7)} className="pointer-events-auto flex h-10 w-10 items-center justify-center text-ink/35 transition hover:text-ink" aria-label="Previous week"><ChevronLeft size={21} strokeWidth={1.5} /></button><button type="button" onClick={() => shiftSelectedDate(7)} className="pointer-events-auto flex h-10 w-10 items-center justify-center text-ink/35 transition hover:text-ink" aria-label="Next week"><ChevronRight size={21} strokeWidth={1.5} /></button></div>
-        <div className="hidden overflow-hidden lg:block"><div className="grid grid-cols-[52px_repeat(5,minmax(0,1fr))]"><div className="flex items-center px-2 py-3 font-display text-[10px] font-bold tracking-[.18em] text-ink/55">TIME</div>{WEEKDAYS.slice(0, 5).map((day, index) => <WeekDateBox key={day} day={day} date={new Date(dateForDay(index))} selected={highlightedDays.has(index)} accent={monthAccent} onClick={() => toggleWeekday(index)} />)}<div><HourAxis short /></div>{WEEKDAYS.slice(0, 5).map((day, index) => <div key={`timeline-${day}`} className="relative min-w-0 border-l border-ink/12 px-1.5" style={highlightedDays.has(index) ? { backgroundColor: wash(monthAccent, .08) } : undefined}><DayTimeline entries={byDay[index]} accent={monthAccent} currentTime={dateValueForDay(index) === today ? clock : undefined} highlightedPeople={highlightedPeople} onToggle={togglePerson} edit={weekEditApi} weekday={index + 1} short /></div>)}</div></div>
+        <div className="hidden overflow-hidden lg:block"><div className="grid grid-cols-[52px_repeat(5,minmax(0,1fr))]"><div className="flex items-center px-2 py-3 font-display text-[10px] font-bold tracking-[.18em] text-ink/55">TIME</div>{WEEKDAYS.slice(0, 5).map((day, index) => <WeekDateBox key={day} day={day} date={new Date(dateForDay(index))} selected={highlightedDays.has(index)} accent={monthAccent} onClick={() => toggleWeekday(index)} />)}<div><HourAxis short /></div>{WEEKDAYS.slice(0, 5).map((day, index) => <div key={`timeline-${day}`} className="relative min-w-0 border-l border-ink/12 px-1.5" style={highlightedDays.has(index) ? { backgroundColor: wash(monthAccent, .08) } : undefined}><DayTimeline entries={byDay[index]} accent={monthAccent} currentTime={dateValueForDay(index) === today ? clock : undefined} highlightedPeople={highlightedPeople} onToggle={togglePerson} edit={weekEditApi} weekday={index + 1} drawDisabled={!isTermDate(dateValueForDay(index))} short /></div>)}</div></div>
         <div className="space-y-2 lg:hidden">{WEEKDAYS.slice(0, 5).map((day, index) => <div key={day} className="flex w-full items-stretch gap-2" style={highlightedDays.has(index) ? { backgroundColor: wash(monthAccent, .08) } : undefined}><WeekDateBox day={day} date={new Date(dateForDay(index))} selected={highlightedDays.has(index)} accent={monthAccent} onClick={() => toggleWeekday(index)} /><button onClick={() => setSelectedDateValue(dateValueForDay(index))} className="relative min-w-0 flex-1 px-1 text-left"><span className="relative block h-full min-h-12"><span className="absolute inset-y-0 left-0 right-0 flex items-end gap-px">{Array.from({ length: 48 }, (_, slot) => { const start = 7 * 60 + slot * 15; const count = byDay[index].filter(({ block }) => toMinutes(block.startTime) <= start && toMinutes(block.endTime) > start).length; return <i key={slot} className="flex-1 bg-slate" style={{ height: `${count ? Math.max(15, count * 24) : 0}%`, opacity: count ? .78 : 0 }} />; })}</span></span></button></div>)}</div>
         <PeoplePalette people={people} blocks={boardBlocks} highlightedPeople={highlightedPeople} onToggle={togglePerson} admin={admin} onReorder={reorderPalette} confirmedHours={confirmedHoursByPerson} />
       </section>

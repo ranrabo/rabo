@@ -12,9 +12,10 @@ import { person, weeklyBlock } from "./schema";
 //   --deactivate-others  set active=false on every person NOT in the team list
 //   --force              actually write; without it the script only prints a plan
 //
-// Term runs 2026-08-26 .. 2027-05-20 with a winter break: nobody is scheduled
-// from 2026-12-14 through 2027-01-24. That break is expressed by giving every
-// slot two effective segments instead of one continuous range.
+// Term runs 2026-08-26 .. 2027-05-10 with a winter break: nobody is scheduled
+// from 2026-12-14 through 2027-01-23. That break is expressed by giving every
+// slot two effective segments instead of one continuous range. Keep these in
+// sync with TERM_SEGMENTS in src/lib/term.ts.
 
 const args = process.argv.slice(2);
 const force = args.includes("--force");
@@ -25,7 +26,7 @@ config({ path: envFile });
 
 const SEGMENTS = [
   { effectiveFrom: "2026-08-26", effectiveTo: "2026-12-13" },
-  { effectiveFrom: "2027-01-25", effectiveTo: "2027-05-20" },
+  { effectiveFrom: "2027-01-24", effectiveTo: "2027-05-10" },
 ];
 
 const WEEKDAY = { Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5 } as const;

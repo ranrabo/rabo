@@ -6,6 +6,7 @@ import { auth, signOut } from "@/auth";
 import { db } from "@/db";
 import { adminNote, blockAttendance, labSession, person, weeklyBlock } from "@/db/schema";
 import { getLabToday } from "@/lib/utils";
+import { isTermDate, outOfTermReason, upcomingTermSegments } from "@/lib/term";
 
 const requireAdmin = async () => {
   const session = await auth();
@@ -40,6 +41,7 @@ const scheduleFields = (formData: FormData) => {
   if (!Number.isInteger(weekday) || weekday < 1 || weekday > 7) throw new Error("Choose a valid day.");
   if (startTime < "07:00" || endTime > "19:00" || endTime <= startTime) throw new Error("Schedule blocks must be between 07:00 and 19:00.");
   if ([startTime, endTime].some((time) => Number(time.slice(3)) % 15 !== 0)) throw new Error("Schedule blocks must use 15-minute increments.");
+  if (!isTermDate(effectiveFrom)) throw new Error(`Nobody is scheduled ${outOfTermReason(effectiveFrom)}.`);
 
   return { personId, weekday, startTime, endTime, effectiveFrom };
 };
@@ -75,6 +77,15 @@ export const addScheduleBlock = async (formData: FormData) => {
   if (startTime < "07:00" || endTime > "19:00" || endTime <= startTime) throw new Error("Schedule blocks must sit between 07:00 and 19:00.");
   if ([startTime, endTime].some((value) => Number(value.slice(3)) % 15 !== 0)) throw new Error("Schedule blocks must use 15-minute increments.");
 
+  // Work out which calendar ranges this block should cover before touching the
+  // roster, so an out-of-term request never creates a stray person.
+  const segments = scope === "term"
+    ? upcomingTermSegments(getLabToday())
+    : isTermDate(date) ? [{ from: date, to: date }] : [];
+  if (!segments.length) {
+    throw new Error(scope === "term" ? "The term is over — nothing left to schedule." : `Nobody is scheduled ${outOfTermReason(date)}.`);
+  }
+
   let personId = Number(text(formData, "personId"));
   if (!Number.isInteger(personId) || personId < 1) {
     const fullName = text(formData, "newName");
@@ -88,15 +99,15 @@ export const addScheduleBlock = async (formData: FormData) => {
     personId = created.id;
   }
 
-  await db.insert(weeklyBlock).values({
+  await db.insert(weeklyBlock).values(segments.map((segment) => ({
     personId,
     weekday: weekdayOf(date),
     startTime,
     endTime,
-    effectiveFrom: scope === "term" ? getLabToday() : date,
-    effectiveTo: scope === "term" ? null : date,
+    effectiveFrom: segment.from,
+    effectiveTo: segment.to, // "day only" -> from === to; "ongoing" -> end of each term segment
     loggedBy: session.user?.name || "Admin",
-  });
+  })));
   refresh();
 };
 
