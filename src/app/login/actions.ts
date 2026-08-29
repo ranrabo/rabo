@@ -1,18 +1,26 @@
 "use server";
 
+import { AuthError } from "next-auth";
 import { signIn } from "@/auth";
 import bcrypt from "bcryptjs";
-import { count, eq } from "drizzle-orm";
+import { count } from "drizzle-orm";
 import { redirect } from "next/navigation";
 import { db } from "@/db";
 import { appUser } from "@/db/schema";
 
 export const authenticate = async (formData: FormData) => {
-  await signIn("credentials", {
-    email: String(formData.get("identifier") || ""),
-    password: String(formData.get("password") || ""),
-    redirectTo: "/admin",
-  });
+  try {
+    await signIn("credentials", {
+      email: String(formData.get("identifier") || ""),
+      password: String(formData.get("password") || ""),
+      redirectTo: "/admin",
+    });
+  } catch (error) {
+    if (error instanceof AuthError) {
+      redirect("/login?error=credentials");
+    }
+    throw error;
+  }
 };
 
 export const createFirstUser = async (formData: FormData) => {

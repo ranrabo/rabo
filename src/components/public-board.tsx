@@ -161,7 +161,7 @@ export function PublicBoard({ today, now, people, blocks, openSessions }: { toda
   const weekEnd = new Date(dateForDay(4));
   const weekStartMonth = weekStart.toLocaleString("en-US", { month: "short" }).toUpperCase();
   const weekEndMonth = weekEnd.toLocaleString("en-US", { month: "short" }).toUpperCase();
-  return <div className="min-h-screen px-4 pb-20 sm:px-8" style={{ backgroundColor: wash(monthAccent, .12) }}>
+  return <div className="min-h-screen px-4 pb-20 sm:px-8" style={{ backgroundImage: `linear-gradient(135deg, ${wash(monthAccent, .18)}, ${wash(monthAccent, .08)} 48%, rgba(255,253,249,.72))` }}>
     <section className="mx-auto max-w-[1280px] overflow-hidden border-x border-ink/20 bg-[#FFFDF9] shadow-[0_16px_50px_rgba(43,41,38,.08)]">
       <div className="mx-auto flex w-full items-center justify-between gap-4 bg-paper-deep px-5 py-4 sm:px-6">
         <Link href="/" aria-label="RABO home" className="flex items-end gap-3"><span className="font-display text-2xl font-extrabold tracking-[.06em]">RABO</span><span className="text-sm font-extrabold tracking-[.16em]" style={{ color: monthAccent }}>ランラボ</span></Link>
@@ -181,7 +181,7 @@ export function PublicBoard({ today, now, people, blocks, openSessions }: { toda
         <div className="space-y-2 lg:hidden">{WEEKDAYS.slice(0, 5).map((day, index) => <div key={day} className="flex w-full items-stretch gap-2" style={highlightedDays.has(index) ? { backgroundColor: wash(monthAccent, .08) } : undefined}><WeekDateBox day={day} date={new Date(dateForDay(index))} selected={highlightedDays.has(index)} accent={monthAccent} onClick={() => toggleWeekday(index)} /><button onClick={() => setSelectedDateValue(dateValueForDay(index))} className="relative min-w-0 flex-1 px-1 text-left"><span className="relative block h-full min-h-12"><span className="absolute inset-y-0 left-0 right-0 flex items-end gap-px">{Array.from({ length: 48 }, (_, slot) => { const start = 7 * 60 + slot * 15; const count = byDay[index].filter(({ block }) => toMinutes(block.startTime) <= start && toMinutes(block.endTime) > start).length; return <i key={slot} className="flex-1 bg-slate" style={{ height: `${count ? Math.max(15, count * 24) : 0}%`, opacity: count ? .78 : 0 }} />; })}</span></span></button></div>)}</div>
         <PeoplePalette people={people} highlightedPeople={highlightedPeople} onToggle={togglePerson} />
       </section>
-      <footer className="flex flex-wrap items-center justify-between gap-3 bg-paper-deep px-5 py-4 font-display text-[10px] font-medium tracking-[.14em] text-ink/50 sm:px-10"><span>RABO.YANGRAN.ORG · © Yang Ran 2026</span><span className="flex flex-wrap items-center justify-end gap-4"><span>07:00–19:00 · AMERICA/NEW_YORK</span><Link href="/admin" className="font-medium tracking-[.08em] text-ink/35 transition hover:text-coral">管理者ログイン</Link></span></footer>
+      <footer className="flex flex-wrap items-center justify-between gap-3 bg-paper-deep px-5 py-4 font-display text-[10px] font-medium tracking-[.14em] text-ink/50 sm:px-10"><span>RABO.YANGRAN.ORG · © Yang Ran 2026</span><span className="flex flex-wrap items-center justify-end gap-4"><span>07:00–19:00 · AMERICA/NEW_YORK</span><a href="https://rabo.yangran.org/login" className="font-medium tracking-[.08em] text-ink/35 transition hover:text-coral">管理者ログイン</a></span></footer>
     </section>
   </div>;
 }

@@ -12,13 +12,15 @@ import { authenticate, createFirstUser } from "./actions";
 
 const HOURS = ["6", "9", "12", "15", "18", "21"];
 const FIELD = "rounded-none border-0 border-b border-ink/30 bg-transparent px-1 focus:border-slate focus:ring-0";
+const MONTH_HUES = ["#EE7E61", "#A47351", "#D590B6", "#F28D9D", "#B5A131", "#459379", "#2095A6", "#5F70B3", "#A26A5F", "#668144", "#91517D", "#AB3A46"];
 
-export default async function LoginPage({ searchParams }: { searchParams: Promise<{ setup?: string }> }) {
+export default async function LoginPage({ searchParams }: { searchParams: Promise<{ setup?: string; error?: string }> }) {
   const [{ userCount }] = await db.select({ userCount: count() }).from(appUser);
   const isFirstUse = userCount === 0;
   const params = searchParams ? await searchParams : {};
   const setupComplete = params.setup === "complete";
   const setupError = params.setup === "error";
+  const loginError = params.error === "credentials";
 
   const today = new Date(`${getLabToday()}T12:00:00`);
   const quote = quoteForDate(today);
@@ -26,8 +28,9 @@ export default async function LoginPage({ searchParams }: { searchParams: Promis
   const weekdayShort = today.toLocaleString("en-US", { weekday: "short" }).toUpperCase();
   const weekdayKanji = ["日", "月", "火", "水", "木", "金", "土"][today.getDay()];
   const dayOfYear = Math.floor((Date.UTC(today.getFullYear(), today.getMonth(), today.getDate()) - Date.UTC(today.getFullYear(), 0, 0)) / 86_400_000);
+  const monthAccent = MONTH_HUES[today.getMonth()];
 
-  return <div className="flex min-h-screen items-center justify-center overflow-x-hidden bg-paper px-5 py-14 sm:px-8">
+  return <div className="flex min-h-screen items-center justify-center overflow-x-hidden px-5 py-14 sm:px-8" style={{ backgroundImage: `linear-gradient(135deg, ${monthAccent}22, ${monthAccent}0d 48%, rgba(213,217,208,.72))` }}>
     <div className="techo-sheet techo-grid w-full min-w-0 max-w-[400px] -rotate-[0.7deg] border border-ink/10 pb-7 pl-6 pr-7 pt-6 sm:pl-7">
       {/* date header — Hobonichi day box */}
       <div className="grid grid-cols-[auto_minmax(0,1fr)_auto_auto] items-stretch overflow-hidden border border-ink/25 font-display leading-none text-slate">
@@ -66,6 +69,7 @@ export default async function LoginPage({ searchParams }: { searchParams: Promis
             <h1 className="display mt-2 text-2xl font-bold leading-tight">Sign in</h1>
             <p className="mt-2 text-[13px] leading-6 text-ink/55">Enter the shared admin credentials.</p>
             {setupComplete && <p className="mt-4 border-l-2 border-slate bg-slate/10 px-3 py-2 text-[13px] font-bold text-slate">Account ready — sign in below.</p>}
+            {loginError && <p className="mt-4 border-l-2 border-coral bg-coral/10 px-3 py-2 text-[13px] font-bold text-coral">Incorrect username or password.</p>}
             <form action={authenticate} className="mt-5 space-y-4">
               <div><Label htmlFor="identifier">Username or email</Label><Input id="identifier" name="identifier" type="text" autoComplete="username" required className={FIELD} /></div>
               <div><Label htmlFor="password">Password</Label><Input id="password" name="password" type="password" autoComplete="current-password" required className={FIELD} /></div>
