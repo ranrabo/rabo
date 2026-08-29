@@ -3,11 +3,11 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
-import type { Person, WeeklyBlock } from "@/db/schema";
+import type { PublicPerson, WeeklyBlock } from "@/db/schema";
 import { addDays, formatTime, getMonday, toMinutes, WEEKDAYS } from "@/lib/utils";
 
-type BlockWithMember = { block: WeeklyBlock; member: Person };
-type SessionWithMember = { session: { personId: number; startTime: string; endTime: string | null }; member: Person };
+type BlockWithMember = { block: WeeklyBlock; member: PublicPerson };
+type SessionWithMember = { session: { personId: number; startTime: string; endTime: string | null }; member: PublicPerson };
 
 const hues = ["#EE7E61", "#A47351", "#D590B6", "#F28D9D", "#B5A131", "#459379", "#2095A6", "#5F70B3", "#A26A5F", "#668144", "#91517D", "#AB3A46", "#4F6E8F", "#7D7A86", "#D9A05B"];
 const sundayColor = "#E0525A";
@@ -81,7 +81,7 @@ function DayTimeline({ entries, mobile = false, short = false, accent }: { entri
 function DayHero({ selectedDate, selectedDay, dateAccent, clock, selectedMonthYear, entries, openSessions }: { selectedDate: Date; selectedDay: number; dateAccent: string; clock: string; selectedMonthYear: string; entries: BlockWithMember[]; openSessions: SessionWithMember[] }) {
   return <div className="grid gap-8 px-5 pb-6 pt-8 sm:px-10 sm:pb-8 sm:pt-10 lg:grid-cols-[minmax(0,1fr)_minmax(0,2fr)] lg:gap-12">
     <div className="flex min-h-[220px] min-w-0 flex-col justify-between border border-[#EAEAEA] bg-[#FFFDF9]"><div className="flex flex-1 items-center justify-center px-4 py-7"><div className="grid w-full max-w-[420px] grid-cols-[.9fr_1.6fr_1fr] border border-[#EAEAEA] font-display leading-none" style={{ color: dateAccent }}><div className="flex flex-col items-center justify-center border-r border-[#EAEAEA] px-2 py-4 sm:px-3"><span className="whitespace-nowrap text-[11px] font-bold tracking-[.12em]">{selectedDate.toLocaleString("en-US", { month: "short" }).toUpperCase()}</span><span className="mt-2 whitespace-nowrap text-xs font-medium tracking-[.12em]">{selectedDate.getFullYear()}</span></div><div className="flex min-w-0 items-center justify-center border-r border-[#EAEAEA] px-2 py-3 text-[5.75rem] font-extrabold tracking-[-.1em] sm:px-4 sm:text-[7rem]">{selectedDate.getDate()}</div><div className="flex flex-col items-center justify-center gap-2 px-2 py-4 text-ink/70 sm:px-4"><span className="whitespace-nowrap text-3xl font-extrabold sm:text-4xl">{["月", "火", "水", "木", "金", "土", "日"][selectedDay]}</span><span className="whitespace-nowrap text-sm font-extrabold tracking-[.16em] text-ink/65 sm:text-base">{WEEKDAYS[selectedDay].toUpperCase()}</span></div></div></div><div className="flex items-center justify-between px-4 py-3 font-display text-xs font-extrabold tabular-nums sm:px-6"><span className="flex items-center gap-2"><span className="h-2 w-2 animate-pulse rounded-full bg-coral" />{clock}<span className="text-[10px] font-medium tracking-[.14em] text-ink/50">LAB TIME</span></span><span className="whitespace-nowrap text-[10px] font-medium tracking-[.14em] text-ink/45">{selectedMonthYear}</span></div></div>
-    <div className="self-center px-2 sm:px-5"><TodayList entries={entries} openSessions={openSessions} /></div>
+    <div className="w-fit max-w-full self-center justify-self-start px-2 sm:px-5"><TodayList entries={entries} openSessions={openSessions} /></div>
   </div>;
 }
 
@@ -89,11 +89,11 @@ function TodayList({ entries, openSessions }: { entries: BlockWithMember[]; open
   const scheduledIds = new Set(entries.map(({ member }) => member.id));
   const rows = [...entries.map(({ block, member }) => ({ member, start: block.startTime, end: block.endTime })), ...openSessions.filter(({ member }) => !scheduledIds.has(member.id)).map(({ session, member }) => ({ member, start: session.startTime, end: "Now" }))];
   return <div>
-    {rows.length ? rows.map(({ member, start, end }) => <Link href={`/people/${member.id}`} key={member.id} className="flex min-h-11 items-center justify-between gap-3 py-1.5 transition hover:bg-ink/[.03]"><span className="flex min-w-0 items-center gap-2.5"><span className="h-7 w-1 rounded-[1px]" style={{ backgroundColor: hues[(member.id - 1) % hues.length] }} /><span className="truncate font-display text-sm font-bold">{member.fullName}</span></span><span className="shrink-0 font-display text-[11px] tabular-nums text-ink/55">{formatTime(start)}–{end === "Now" ? "now" : formatTime(end)}</span></Link>) : <p className="border-l-2 border-coral pl-3 text-sm leading-6 text-ink/70">Nobody has hours today.</p>}
+    {rows.length ? rows.map(({ member, start, end }) => <Link href={`/people/${member.id}`} key={member.id} className="flex min-h-11 items-center justify-start gap-3 py-1.5 transition hover:bg-ink/[.03]"><span className="flex min-w-0 items-center gap-2.5"><span className="h-7 w-1 rounded-[1px]" style={{ backgroundColor: hues[(member.id - 1) % hues.length] }} /><span className="truncate font-display text-sm font-bold">{member.fullName}</span></span><span className="shrink-0 font-display text-[11px] tabular-nums text-ink/55">{formatTime(start)}–{end === "Now" ? "now" : formatTime(end)}</span></Link>) : <p className="border-l-2 border-coral pl-3 text-sm leading-6 text-ink/70">Nobody has hours today.</p>}
   </div>;
 }
 
-export function PublicBoard({ today, now, people, blocks, openSessions }: { today: string; now: string; people: Person[]; blocks: BlockWithMember[]; openSessions: SessionWithMember[] }) {
+export function PublicBoard({ today, now, people, blocks, openSessions }: { today: string; now: string; people: PublicPerson[]; blocks: BlockWithMember[]; openSessions: SessionWithMember[] }) {
   const [selectedDateValue, setSelectedDateValue] = useState(today);
   const [clock, setClock] = useState(now);
   useEffect(() => {
@@ -122,13 +122,13 @@ export function PublicBoard({ today, now, people, blocks, openSessions }: { toda
     <section className="mx-auto max-w-[1280px] overflow-hidden border-x border-ink/20 bg-[#FFFDF9] shadow-[0_16px_50px_rgba(43,41,38,.08)]">
       <div className="flex items-center justify-between gap-4 bg-paper-deep px-5 py-4 sm:px-10">
         <Link href="/" aria-label="RABO home" className="flex items-end gap-3"><span className="font-display text-2xl font-extrabold tracking-[-.06em]">RABO</span><span className="text-sm font-extrabold tracking-[.16em]" style={{ color: monthAccent }}>ランラボ</span></Link>
-        <div className="flex items-center gap-3"><button type="button" onClick={() => setSelectedDateValue(today)} className={`font-display text-[11px] font-bold tracking-[.08em] transition ${selectedDateValue === today ? "text-ink/25" : "text-ink/45 hover:text-ink"}`} aria-label="Return to today">today</button><a href="https://yangran.org/" target="_blank" rel="noreferrer" className="border border-ink/25 px-3 py-2 font-display text-[11px] font-bold tracking-[.08em] text-ink/60 transition hover:border-ink/60 hover:text-ink">yangran.org ↗</a></div>
+        <div className="flex items-center gap-3"><button type="button" onClick={() => setSelectedDateValue(today)} className={`border px-3 py-2 font-display text-[11px] font-bold tracking-[.08em] transition ${selectedDateValue === today ? "border-ink/10 text-ink/25" : "border-ink/20 text-ink/55 hover:border-ink/55 hover:text-ink"}`} aria-label="Return to today" aria-pressed={selectedDateValue === today}>today</button><a href="https://yangran.org/" target="_blank" rel="noreferrer" className="border border-ink/25 px-3 py-2 font-display text-[11px] font-bold tracking-[.08em] text-ink/60 transition hover:border-ink/60 hover:text-ink">yangran.org ↗</a></div>
       </div>
       <div className="px-5 py-1.5 sm:px-10" style={{ backgroundColor: monthAccent }} />
       <DayHero selectedDate={selectedDate} selectedDay={selectedDay} dateAccent={dateAccent} clock={clock} selectedMonthYear={selectedMonthYear} entries={currentEntries} openSessions={selectedDateValue === today ? openSessions : []} />
-      <div className="relative px-8 pb-8 sm:px-12">
-        <button aria-label="Previous day" onClick={() => shiftSelectedDate(-1)} className="absolute left-0 top-1/2 z-10 flex h-8 w-7 -translate-y-1/2 items-center justify-center border border-ink/20 bg-[#FFFDF9] text-ink/35 transition hover:border-ink/50 hover:text-ink"><ChevronLeft size={14} /></button><button aria-label="Next day" onClick={() => shiftSelectedDate(1)} className="absolute right-0 top-1/2 z-10 flex h-8 w-7 -translate-y-1/2 items-center justify-center border border-ink/20 bg-[#FFFDF9] text-ink/35 transition hover:border-ink/50 hover:text-ink"><ChevronRight size={14} /></button>
-        <div className="grid grid-cols-[52px_16px_minmax(0,1fr)] sm:grid-cols-[82px_22px_minmax(0,1fr)]"><HourAxis /><DensityBand entries={currentEntries} color={monthAccent} /><div className="min-w-0"><DayTimeline entries={currentEntries} accent={monthAccent} /></div></div>
+      <div className="relative px-5 pb-8 sm:px-6">
+        <button aria-label="Previous day" onClick={() => shiftSelectedDate(-1)} className="absolute left-0 top-1/2 z-10 flex h-8 w-6 -translate-y-1/2 items-center justify-center border border-ink/20 bg-[#FFFDF9] text-ink/35 transition hover:border-ink/50 hover:text-ink"><ChevronLeft size={14} /></button><button aria-label="Next day" onClick={() => shiftSelectedDate(1)} className="absolute right-0 top-1/2 z-10 flex h-8 w-6 -translate-y-1/2 items-center justify-center border border-ink/20 bg-[#FFFDF9] text-ink/35 transition hover:border-ink/50 hover:text-ink"><ChevronRight size={14} /></button>
+        <div className="mx-auto grid w-full grid-cols-[52px_16px_minmax(0,1fr)] sm:grid-cols-[82px_22px_minmax(0,1fr)]"><HourAxis /><DensityBand entries={currentEntries} color={monthAccent} /><div className="min-w-0"><DayTimeline entries={currentEntries} accent={monthAccent} /></div></div>
       </div>
       <DayExtras selectedDate={selectedDate} selectedDay={selectedDay} blocks={blocks} />
       <section className="px-5 pb-10 pt-8 sm:px-10 sm:pt-10">

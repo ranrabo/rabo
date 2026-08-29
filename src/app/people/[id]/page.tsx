@@ -9,7 +9,10 @@ export const dynamic = "force-dynamic";
 
 export default async function PersonPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const member = await db.query.person.findFirst({ where: eq(person.id, Number(id)) });
+  const member = await db.query.person.findFirst({
+    columns: { id: true, fullName: true, researchArea: true, active: true },
+    where: eq(person.id, Number(id)),
+  });
   if (!member || !member.active) notFound();
   const hues = ["#EE7E61", "#A47351", "#D590B6", "#F28D9D", "#B5A131", "#459379", "#2095A6", "#5F70B3", "#A26A5F", "#668144", "#91517D", "#AB3A46", "#4F6E8F", "#7D7A86", "#D9A05B"];
   const hue = hues[(member.id - 1) % hues.length];

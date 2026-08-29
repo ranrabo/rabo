@@ -14,6 +14,7 @@ const requireAdmin = async () => {
 };
 
 const text = (data: FormData, name: string) => String(data.get(name) || "").trim();
+const email = (data: FormData) => text(data, "email").toLowerCase() || null;
 const refresh = () => { revalidatePath("/"); revalidatePath("/admin"); revalidatePath("/admin/report"); };
 
 export const startSession = async (formData: FormData) => {
@@ -53,13 +54,13 @@ export const deleteSession = async (formData: FormData) => {
 
 export const addPerson = async (formData: FormData) => {
   await requireAdmin();
-  await db.insert(person).values({ fullName: text(formData, "fullName"), researchArea: text(formData, "researchArea"), sortOrder: Number(text(formData, "sortOrder")) || 0 });
+  await db.insert(person).values({ fullName: text(formData, "fullName"), email: email(formData), researchArea: text(formData, "researchArea"), sortOrder: Number(text(formData, "sortOrder")) || 0 });
   refresh();
 };
 
 export const updatePerson = async (formData: FormData) => {
   await requireAdmin();
-  await db.update(person).set({ fullName: text(formData, "fullName"), researchArea: text(formData, "researchArea"), sortOrder: Number(text(formData, "sortOrder")) || 0 }).where(eq(person.id, Number(text(formData, "id"))));
+  await db.update(person).set({ fullName: text(formData, "fullName"), email: email(formData), researchArea: text(formData, "researchArea"), sortOrder: Number(text(formData, "sortOrder")) || 0 }).where(eq(person.id, Number(text(formData, "id"))));
   refresh();
 };
 

@@ -3,20 +3,28 @@ import { db } from "@/db";
 import { labSession, person, weeklyBlock } from "@/db/schema";
 import { addDays, getLabNow, getLabToday, getMonday, getWeekdayIndex } from "@/lib/utils";
 
+const publicMember = {
+  id: person.id,
+  fullName: person.fullName,
+  researchArea: person.researchArea,
+  active: person.active,
+  sortOrder: person.sortOrder,
+};
+
 export const getHomeData = async () => {
   const today = getLabToday();
   const monday = getMonday(today);
   const sunday = addDays(monday, 6);
   const [people, blocks, openSessions] = await Promise.all([
-    db.select().from(person).where(eq(person.active, true)).orderBy(asc(person.sortOrder), asc(person.fullName)),
+    db.select(publicMember).from(person).where(eq(person.active, true)).orderBy(asc(person.sortOrder), asc(person.fullName)),
     db
-      .select({ block: weeklyBlock, member: person })
+      .select({ block: weeklyBlock, member: publicMember })
       .from(weeklyBlock)
       .innerJoin(person, eq(weeklyBlock.personId, person.id))
       .where(and(eq(person.active, true), lte(weeklyBlock.effectiveFrom, sunday), or(isNull(weeklyBlock.effectiveTo), gte(weeklyBlock.effectiveTo, monday))))
       .orderBy(asc(weeklyBlock.weekday), asc(weeklyBlock.startTime)),
     db
-      .select({ session: labSession, member: person })
+      .select({ session: labSession, member: publicMember })
       .from(labSession)
       .innerJoin(person, eq(labSession.personId, person.id))
       .where(and(eq(labSession.sessionDate, today), isNull(labSession.endTime), eq(person.active, true))),
