@@ -1,20 +1,52 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
-import { ChevronLeft, ChevronRight } from "lucide-react";
+import { useEffect, useMemo, useRef, useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
+import { Check, ChevronLeft, ChevronRight, Trash2, X } from "lucide-react";
 import type { PublicPerson, WeeklyBlock } from "@/db/schema";
 import { addDays, firstName, formatTime, getMonday, toMinutes, WEEKDAYS } from "@/lib/utils";
 import { quoteForDate } from "@/lib/quotes";
+import { createWeeklyBlock, deleteWeeklyBlock, updateWeeklyBlock } from "@/app/admin/actions";
 
 type BlockWithMember = { block: WeeklyBlock; member: PublicPerson };
 type SessionWithMember = { session: { personId: number; startTime: string; endTime: string | null }; member: PublicPerson };
+
+type Pos = { weekday: number; start: number; end: number };
+type Edit = Pos & { personId: number };
+type DragState = { id: number; mode: "move" | "top" | "bottom"; crossDay: boolean; startX: number; startY: number; mpp: number; startPos: Pos; personId: number; moved: boolean };
+type BarEditApi = {
+  crossDay: boolean;
+  isDirty: (id: number) => boolean;
+  isSaving: (id: number) => boolean;
+  onDraw: (weekday: number, start: number, end: number, anchor: DOMRect) => void;
+  onBarPointerDown: (event: React.PointerEvent, id: number) => void;
+  onEdgePointerDown: (event: React.PointerEvent, id: number, edge: "top" | "bottom") => void;
+  onDragMove: (event: React.PointerEvent) => void;
+  onDragEnd: (event: React.PointerEvent) => void;
+  onCommit: (id: number) => void;
+  onRevert: (id: number) => void;
+};
 
 const hues = ["#EE7E61", "#A47351", "#D590B6", "#F28D9D", "#B5A131", "#459379", "#2095A6", "#5F70B3", "#A26A5F", "#668144", "#91517D", "#AB3A46", "#4F6E8F", "#7D7A86", "#D9A05B"];
 const sundayColor = "#E0525A";
 const dayStart = 7 * 60;
 const dayEnd = 19 * 60;
 const daySpan = dayEnd - dayStart;
+
+const SLOT = 15;
+const toTime = (minutes: number) => `${String(Math.floor(minutes / 60)).padStart(2, "0")}:${String(minutes % 60).padStart(2, "0")}`;
+const snapMin = (minutes: number) => Math.round(minutes / SLOT) * SLOT;
+const clampMin = (value: number, low: number, high: number) => Math.max(low, Math.min(high, value));
+const clampRange = (first: number, second: number) => {
+  let start = Math.min(first, second);
+  let end = Math.max(first, second);
+  if (end - start < SLOT) {
+    end = Math.min(dayEnd, start + SLOT);
+    if (end - start < SLOT) start = dayEnd - SLOT;
+  }
+  return { start, end };
+};
 const moonPhases = [
   { name: "New Moon", symbol: "🌑" },
   { name: "Waxing Crescent", symbol: "🌒" },
@@ -72,16 +104,48 @@ function DayExtras({ selectedDate, selectedDay, blocks, today, onSelectDate }: {
   </div>;
 }
 
-function BlockBar({ entry, lane, laneCount, compact = false, vertical = false, highlighted, onToggle }: { entry: BlockWithMember; lane: number; laneCount: number; compact?: boolean; vertical?: boolean; highlighted: boolean; onToggle: (personId: number) => void }) {
+function BlockBar({ entry, lane, laneCount, compact = false, vertical = false, highlighted, onToggle, edit }: { entry: BlockWithMember; lane: number; laneCount: number; compact?: boolean; vertical?: boolean; highlighted: boolean; onToggle: (personId: number) => void; edit?: BarEditApi }) {
   const { block, member } = entry;
   const color = member.color;
   const barColor = highlighted ? brighten(color) : color;
   const left = compact ? "4%" : `calc(6px + ${lane} * (100% - 10px) / ${laneCount})`;
   const width = compact ? "92%" : `calc((100% - 10px) / ${laneCount} - 3px)`;
-  return <button type="button" onClick={() => onToggle(member.id)} aria-pressed={highlighted} aria-label={`Highlight ${firstName(member.fullName)}`} title={`${firstName(member.fullName)}, ${formatTime(block.startTime)}–${formatTime(block.endTime)}`} className="absolute z-[1] overflow-hidden rounded-[2px] border-l-[3px] px-2 py-1.5 text-left transition hover:z-10 hover:brightness-95" style={{ top: `${dayPosition(block.startTime)}%`, height: `${Math.max(((toMinutes(block.endTime) - toMinutes(block.startTime)) / daySpan) * 100, compact ? 5 : 3.8)}%`, left, width, backgroundColor: wash(color, highlighted ? .32 : .16), borderLeftColor: barColor, boxShadow: highlighted ? `0 0 0 1px ${barColor}` : undefined }}><span className={`block truncate font-display text-[11px] font-bold leading-tight ${vertical ? "writing-mode-vertical [writing-mode:vertical-rl]" : ""}`}>{firstName(member.fullName)}</span>{vertical ? null : <span className="mt-1 block truncate text-[10px] font-medium text-ink/60">{formatTime(block.startTime)}–{formatTime(block.endTime)}</span>}</button>;
+  const top = `${dayPosition(block.startTime)}%`;
+  const height = `${Math.max(((toMinutes(block.endTime) - toMinutes(block.startTime)) / daySpan) * 100, compact ? 5 : 3.8)}%`;
+  const label = `${firstName(member.fullName)}, ${formatTime(block.startTime)}–${formatTime(block.endTime)}`;
+
+  if (edit) {
+    const dirty = edit.isDirty(block.id);
+    const saving = edit.isSaving(block.id);
+    return <div className={`absolute ${dirty ? "z-20" : "z-[1]"}`} style={{ top, height, left, width }}>
+      <div
+        role="button"
+        tabIndex={0}
+        aria-label={`${label}. Drag to move, drag an edge to resize, click to assign or remove.`}
+        title={`${label} — drag to move, edges to resize, click to assign or remove`}
+        onPointerDown={(event) => edit.onBarPointerDown(event, block.id)}
+        onPointerMove={edit.onDragMove}
+        onPointerUp={edit.onDragEnd}
+        className="absolute inset-0 touch-none cursor-grab select-none overflow-hidden rounded-[2px] border-l-[3px] px-2 py-1.5 text-left shadow-sm transition active:cursor-grabbing"
+        style={{ backgroundColor: wash(color, dirty ? .3 : .16), borderLeftColor: barColor, boxShadow: dirty ? `0 0 0 1px ${barColor}` : undefined }}
+      >
+        <span onPointerDown={(event) => edit.onEdgePointerDown(event, block.id, "top")} onPointerMove={edit.onDragMove} onPointerUp={edit.onDragEnd} className="absolute inset-x-0 top-0 z-[3] h-2 cursor-ns-resize touch-none" aria-hidden="true" />
+        <span className={`pointer-events-none block truncate font-display text-[11px] font-bold leading-tight ${vertical ? "writing-mode-vertical [writing-mode:vertical-rl]" : ""}`}>{firstName(member.fullName)}</span>
+        {vertical ? null : <span className="pointer-events-none mt-1 block truncate text-[10px] font-medium text-ink/60">{formatTime(block.startTime)}–{formatTime(block.endTime)}</span>}
+        <span onPointerDown={(event) => edit.onEdgePointerDown(event, block.id, "bottom")} onPointerMove={edit.onDragMove} onPointerUp={edit.onDragEnd} className="absolute inset-x-0 bottom-0 z-[3] h-2 cursor-ns-resize touch-none" aria-hidden="true" />
+      </div>
+      {dirty ? <div className={`absolute z-30 flex gap-1 ${vertical ? "right-0.5 top-0.5" : "left-full top-0 ml-1"}`}>
+        <button type="button" disabled={saving} onPointerDown={(event) => event.stopPropagation()} onClick={() => edit.onCommit(block.id)} aria-label="Save this change" title="Save this change" className="flex h-[18px] w-[18px] items-center justify-center rounded-full border border-slate/40 bg-paper-deep text-slate shadow-sm transition hover:bg-slate hover:text-paper-deep disabled:opacity-50"><Check size={11} strokeWidth={3} /></button>
+        <button type="button" disabled={saving} onPointerDown={(event) => event.stopPropagation()} onClick={() => edit.onRevert(block.id)} aria-label="Discard this change" title="Discard this change" className="flex h-[18px] w-[18px] items-center justify-center rounded-full border border-ink/25 bg-paper-deep text-ink/50 shadow-sm transition hover:bg-ink/10 hover:text-ink disabled:opacity-50"><X size={11} strokeWidth={3} /></button>
+      </div> : null}
+    </div>;
+  }
+
+  return <button type="button" onClick={() => onToggle(member.id)} aria-pressed={highlighted} aria-label={`Highlight ${firstName(member.fullName)}`} title={label} className="absolute z-[1] overflow-hidden rounded-[2px] border-l-[3px] px-2 py-1.5 text-left transition hover:z-10 hover:brightness-95" style={{ top, height, left, width, backgroundColor: wash(color, highlighted ? .32 : .16), borderLeftColor: barColor, boxShadow: highlighted ? `0 0 0 1px ${barColor}` : undefined }}><span className={`block truncate font-display text-[11px] font-bold leading-tight ${vertical ? "writing-mode-vertical [writing-mode:vertical-rl]" : ""}`}>{firstName(member.fullName)}</span>{vertical ? null : <span className="mt-1 block truncate text-[10px] font-medium text-ink/60">{formatTime(block.startTime)}–{formatTime(block.endTime)}</span>}</button>;
 }
 
-function DayTimeline({ entries, mobile = false, short = false, accent, currentTime, highlightedPeople, onToggle }: { entries: BlockWithMember[]; mobile?: boolean; short?: boolean; accent: string; currentTime?: string; highlightedPeople: Set<number>; onToggle: (personId: number) => void }) {
+function DayTimeline({ entries, mobile = false, short = false, accent, currentTime, highlightedPeople, onToggle, edit, weekday }: { entries: BlockWithMember[]; mobile?: boolean; short?: boolean; accent: string; currentTime?: string; highlightedPeople: Set<number>; onToggle: (personId: number) => void; edit?: BarEditApi; weekday?: number }) {
+  const [draw, setDraw] = useState<{ start: number; end: number } | null>(null);
   const lanes: BlockWithMember[][] = [];
   const laneFor = new Map<number, number>();
   [...entries].sort((a, b) => toMinutes(a.block.startTime) - toMinutes(b.block.startTime)).forEach((entry) => {
@@ -94,9 +158,35 @@ function DayTimeline({ entries, mobile = false, short = false, accent, currentTi
   const maxLane = Math.max(lanes.length, 1);
   const hourHeight = short ? 30 : mobile ? 34 : 56;
   const plannerGrid = `repeating-linear-gradient(to bottom, ${wash(accent, .36)} 0 1px, transparent 1px ${hourHeight * 2}px),repeating-linear-gradient(to bottom, ${wash(accent, .22)} 0 1px, transparent 1px ${hourHeight}px),repeating-linear-gradient(to bottom, ${wash(accent, .13)} 0 1px, transparent 1px ${hourHeight / 4}px),repeating-linear-gradient(to right, ${wash(accent, .13)} 0 1px, transparent 1px 26px)`;
-  return <div className={short ? "weekly-day-grid relative w-full" : "day-timeline relative w-full"} style={{ backgroundImage: plannerGrid }}>
+  const canDraw = Boolean(edit && weekday);
+  const minuteAt = (clientY: number, element: HTMLElement) => {
+    const rect = element.getBoundingClientRect();
+    return clampMin(snapMin(dayStart + ((clientY - rect.top) / rect.height) * daySpan), dayStart, dayEnd);
+  };
+  const drawLow = draw ? Math.min(draw.start, draw.end) : 0;
+  const drawSpan = draw ? Math.abs(draw.end - draw.start) : 0;
+  return <div data-timeline data-weekday={weekday} className={short ? "weekly-day-grid relative w-full" : "day-timeline relative w-full"} style={{ backgroundImage: plannerGrid }}>
+    {canDraw ? <div
+      className="absolute inset-0 z-0 cursor-crosshair touch-none"
+      onPointerDown={(event) => { if (event.button !== 0) return; const start = minuteAt(event.clientY, event.currentTarget); event.currentTarget.setPointerCapture(event.pointerId); setDraw({ start, end: start }); }}
+      onPointerMove={(event) => setDraw((current) => current ? { start: current.start, end: minuteAt(event.clientY, event.currentTarget) } : current)}
+      onPointerUp={(event) => {
+        const surface = event.currentTarget.getBoundingClientRect();
+        setDraw((current) => {
+          if (current && Math.abs(current.end - current.start) >= SLOT) {
+            const range = clampRange(current.start, current.end);
+            const anchorTop = surface.top + ((range.start - dayStart) / daySpan) * surface.height;
+            edit!.onDraw(weekday!, range.start, range.end, new DOMRect(surface.left, anchorTop, surface.width, 8));
+          }
+          return null;
+        });
+      }}
+      onPointerCancel={() => setDraw(null)}
+      aria-label={`Draw a schedule block for ${WEEKDAYS[(weekday ?? 1) - 1]}`}
+    /> : null}
     {currentTime && toMinutes(currentTime) >= dayStart && toMinutes(currentTime) <= dayEnd ? <span className="pointer-events-none absolute inset-x-0 z-[2] h-px" style={{ top: `${dayPosition(currentTime)}%`, backgroundColor: accent }} aria-hidden="true" /> : null}
-    {entries.map((entry) => <BlockBar key={entry.block.id} entry={entry} lane={laneFor.get(entry.block.id) || 0} laneCount={maxLane} compact={mobile} vertical={short} highlighted={highlightedPeople.has(entry.member.id)} onToggle={onToggle} />)}
+    {draw && drawSpan >= SLOT ? <div className="pointer-events-none absolute inset-x-1 z-[4] rounded-[3px] border border-dashed border-slate bg-slate/20" style={{ top: `${(drawLow / daySpan) * 100 - (dayStart / daySpan) * 100}%`, height: `${(drawSpan / daySpan) * 100}%` }} /> : null}
+    {entries.map((entry) => <BlockBar key={entry.block.id} entry={entry} lane={laneFor.get(entry.block.id) || 0} laneCount={maxLane} compact={mobile} vertical={short} highlighted={highlightedPeople.has(entry.member.id)} onToggle={onToggle} edit={edit} />)}
   </div>;
 }
 
@@ -127,17 +217,196 @@ function WeekDateBox({ day, date, selected, accent, onClick }: { day: string; da
   return <button onClick={onClick} className="min-w-0 text-left" aria-label={`Select ${day} ${date.getDate()}`}><div className="mx-1 my-2 flex min-h-[94px] flex-col items-center justify-center border bg-[#FFFDF9] px-2 py-2 transition" style={{ borderColor: selected ? dateColor : "#EAEAEA", backgroundColor: selected ? wash(dateColor, .09) : "#FFFDF9", color: selected ? dateColor : undefined }}><span className="font-display text-[10px] font-extrabold tracking-[.14em]">{day.toUpperCase()}</span><span className="mt-1 font-display text-4xl font-extrabold leading-none tracking-[-.08em]">{date.getDate()}</span><span className="mt-2 font-display text-[10px] font-bold tracking-[.12em] text-ink/45">{date.toLocaleString("en-US", { month: "short" }).toUpperCase()}</span></div></button>;
 }
 
-export function PublicBoard({ today, now, people, blocks, openSessions }: { today: string; now: string; people: PublicPerson[]; blocks: BlockWithMember[]; openSessions: SessionWithMember[] }) {
+function AdminPopover({ rect, entry, people, isNew, busy, onAssign, onRemove, onClose }: { rect: DOMRect; entry: BlockWithMember; people: PublicPerson[]; isNew: boolean; busy: boolean; onAssign: (personId: number) => void; onRemove: () => void; onClose: () => void }) {
+  const viewportWidth = typeof window === "undefined" ? 1280 : window.innerWidth;
+  const left = Math.max(12, Math.min(rect.left, viewportWidth - 220));
+  return <>
+    <div className="fixed inset-0 z-40" onPointerDown={onClose} aria-hidden="true" />
+    <div className="fixed z-50 w-52 rounded-md border border-ink/15 bg-[#FFFDF9] p-3 shadow-[0_12px_40px_rgba(43,41,38,.18)]" style={{ left, top: rect.bottom + 8 }} role="dialog" aria-label="Block settings">
+      <p className="font-display text-[10px] font-bold uppercase tracking-[.16em] text-ink/45">{isNew ? "New block" : "Edit block"}</p>
+      <label className="mt-2 block text-[11px] font-medium text-ink/55" htmlFor="admin-popover-person">Person</label>
+      <select id="admin-popover-person" value={entry.block.personId} disabled={busy} onChange={(event) => onAssign(Number(event.target.value))} className="mt-1 w-full rounded border border-ink/20 bg-white px-2 py-1.5 font-display text-xs font-bold text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-aqua">
+        {people.map((member) => <option key={member.id} value={member.id}>{member.fullName}</option>)}
+      </select>
+      <p className="mt-2 font-display text-[11px] tabular-nums text-ink/50">{WEEKDAYS[entry.block.weekday - 1]} · {formatTime(entry.block.startTime)}–{formatTime(entry.block.endTime)}</p>
+      <button type="button" disabled={busy} onClick={onRemove} className="mt-3 flex w-full items-center justify-center gap-1.5 rounded border border-coral/30 px-2 py-1.5 font-display text-[11px] font-bold text-coral transition hover:bg-coral/10 disabled:opacity-50"><Trash2 size={12} /> Remove block</button>
+    </div>
+  </>;
+}
+
+export function PublicBoard({ today, now, people, blocks, openSessions, admin = false }: { today: string; now: string; people: PublicPerson[]; blocks: BlockWithMember[]; openSessions: SessionWithMember[]; admin?: boolean }) {
+  const router = useRouter();
+  const [, startSaving] = useTransition();
   const [selectedDateValue, setSelectedDateValue] = useState(today);
   const [clock, setClock] = useState(now);
   const [highlightedPeople, setHighlightedPeople] = useState<Set<number>>(new Set());
   const [highlightedDays, setHighlightedDays] = useState<Set<number>>(() => new Set([new Date(`${today}T12:00:00`).getDay() === 0 ? 6 : new Date(`${today}T12:00:00`).getDay() - 1]));
+  const [entries, setEntries] = useState<BlockWithMember[]>(blocks);
+  const [edits, setEdits] = useState<Record<number, Edit>>({});
+  const [savingIds, setSavingIds] = useState<Set<number>>(new Set());
+  const [popover, setPopover] = useState<{ id: number; rect: DOMRect } | null>(null);
+  const dragRef = useRef<DragState | null>(null);
+  const tempIdRef = useRef(-1);
   useEffect(() => {
     const tick = () => setClock(new Intl.DateTimeFormat("en-GB", { timeZone: "America/New_York", hour: "2-digit", minute: "2-digit", hour12: false }).format(new Date()));
     const timer = window.setInterval(tick, 60_000);
     return () => window.clearInterval(timer);
   }, []);
-  const byDay = useMemo(() => WEEKDAYS.map((_, index) => blocks.filter(({ block }) => block.weekday === index + 1)), [blocks]);
+  useEffect(() => {
+    if (!admin) return;
+    setEntries((current) => [...blocks, ...current.filter((entry) => entry.block.id < 0)]);
+    setEdits((current) => {
+      const next: Record<number, Edit> = {};
+      for (const key of Object.keys(current)) {
+        const id = Number(key);
+        if (id < 0) { next[id] = current[id]; continue; }
+        const saved = blocks.find((entry) => entry.block.id === id);
+        if (!saved) continue;
+        const change = current[id];
+        const settled = change.weekday === saved.block.weekday && change.start === toMinutes(saved.block.startTime) && change.end === toMinutes(saved.block.endTime) && change.personId === saved.block.personId;
+        if (!settled) next[id] = change;
+      }
+      return next;
+    });
+  }, [blocks, admin]);
+
+  const posFor = (block: WeeklyBlock): Pos => edits[block.id] ?? { weekday: block.weekday, start: toMinutes(block.startTime), end: toMinutes(block.endTime) };
+  const personIdFor = (id: number): number => edits[id]?.personId ?? entries.find((entry) => entry.block.id === id)?.block.personId ?? people[0]?.id ?? 0;
+  const setEdit = (id: number, value: Edit | null) => setEdits((current) => {
+    if (!value) { const nextEdits = { ...current }; delete nextEdits[id]; return nextEdits; }
+    return { ...current, [id]: value };
+  });
+
+  const boardBlocks = useMemo<BlockWithMember[]>(() => {
+    if (!admin) return blocks;
+    return entries.map((entry) => {
+      const pos = posFor(entry.block);
+      const personId = edits[entry.block.id]?.personId ?? entry.block.personId;
+      const member = personId === entry.block.personId ? entry.member : (people.find((person) => person.id === personId) ?? entry.member);
+      return { member, block: { ...entry.block, personId, weekday: pos.weekday, startTime: toTime(pos.start), endTime: toTime(pos.end) } };
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [admin, entries, edits, blocks, people]);
+
+  const startDrag = (event: React.PointerEvent, id: number, mode: DragState["mode"], crossDay: boolean) => {
+    if (event.button !== 0) return;
+    const timeline = (event.currentTarget as HTMLElement).closest("[data-timeline]") as HTMLElement | null;
+    const entry = entries.find((item) => item.block.id === id);
+    if (!timeline || !entry) return;
+    event.stopPropagation();
+    (event.currentTarget as HTMLElement).setPointerCapture(event.pointerId);
+    dragRef.current = { id, mode, crossDay, startX: event.clientX, startY: event.clientY, mpp: daySpan / timeline.getBoundingClientRect().height, startPos: posFor(entry.block), personId: personIdFor(id), moved: false };
+  };
+  const dragMove = (event: React.PointerEvent) => {
+    const drag = dragRef.current;
+    if (!drag) return;
+    if (!drag.moved && Math.abs(event.clientX - drag.startX) < 4 && Math.abs(event.clientY - drag.startY) < 4) return;
+    drag.moved = true;
+    const deltaMin = snapMin((event.clientY - drag.startY) * drag.mpp);
+    let { weekday, start, end } = drag.startPos;
+    if (drag.mode === "move") {
+      const duration = end - start;
+      start = clampMin(start + deltaMin, dayStart, dayEnd - duration);
+      end = start + duration;
+      if (drag.crossDay) {
+        const target = document.elementFromPoint(event.clientX, event.clientY)?.closest("[data-weekday]")?.getAttribute("data-weekday");
+        if (target) weekday = Number(target);
+      }
+    } else if (drag.mode === "top") {
+      start = clampMin(start + deltaMin, dayStart, end - SLOT);
+    } else {
+      end = clampMin(end + deltaMin, start + SLOT, dayEnd);
+    }
+    setEdit(drag.id, { weekday, start, end, personId: drag.personId });
+  };
+  const dragEnd = (event: React.PointerEvent) => {
+    const drag = dragRef.current;
+    dragRef.current = null;
+    if (!drag) return;
+    try { (event.currentTarget as HTMLElement).releasePointerCapture(event.pointerId); } catch { /* capture already gone */ }
+    if (!drag.moved && drag.mode === "move") setPopover({ id: drag.id, rect: (event.currentTarget as HTMLElement).getBoundingClientRect() });
+  };
+  const drawBlock = (weekday: number, start: number, end: number, anchor: DOMRect) => {
+    const member = people[0];
+    if (!member) return;
+    const id = tempIdRef.current;
+    tempIdRef.current -= 1;
+    setEntries((current) => [...current, { member, block: { id, personId: member.id, weekday, startTime: toTime(start), endTime: toTime(end), effectiveFrom: today, effectiveTo: null } }]);
+    setEdit(id, { weekday, start, end, personId: member.id });
+    setPopover({ id, rect: anchor });
+  };
+  const assignPerson = (id: number, personId: number) => {
+    const entry = entries.find((item) => item.block.id === id);
+    if (!entry) return;
+    const pos = posFor(entry.block);
+    setEdit(id, { weekday: pos.weekday, start: pos.start, end: pos.end, personId });
+  };
+  const commitBlock = (id: number) => {
+    const entry = entries.find((item) => item.block.id === id);
+    if (!entry) return;
+    const pos = posFor(entry.block);
+    const form = new FormData();
+    form.set("personId", String(personIdFor(id)));
+    form.set("weekday", String(pos.weekday));
+    form.set("startTime", toTime(pos.start));
+    form.set("endTime", toTime(pos.end));
+    form.set("effectiveFrom", entry.block.effectiveFrom || today);
+    setSavingIds((current) => new Set(current).add(id));
+    startSaving(async () => {
+      try {
+        if (id < 0) {
+          await createWeeklyBlock(form);
+          setEntries((current) => current.filter((item) => item.block.id !== id));
+        } else {
+          form.set("id", String(id));
+          await updateWeeklyBlock(form);
+        }
+        setEdit(id, null);
+        setPopover((current) => current?.id === id ? null : current);
+        router.refresh();
+      } finally {
+        setSavingIds((current) => { const nextIds = new Set(current); nextIds.delete(id); return nextIds; });
+      }
+    });
+  };
+  const revertBlock = (id: number) => {
+    if (id < 0) setEntries((current) => current.filter((item) => item.block.id !== id));
+    setEdit(id, null);
+    setPopover((current) => current?.id === id ? null : current);
+  };
+  const removeBlock = (id: number) => {
+    setPopover(null);
+    if (id < 0) { revertBlock(id); return; }
+    const form = new FormData();
+    form.set("id", String(id));
+    setSavingIds((current) => new Set(current).add(id));
+    startSaving(async () => {
+      try {
+        await deleteWeeklyBlock(form);
+        setEntries((current) => current.filter((item) => item.block.id !== id));
+        setEdit(id, null);
+        router.refresh();
+      } finally {
+        setSavingIds((current) => { const nextIds = new Set(current); nextIds.delete(id); return nextIds; });
+      }
+    });
+  };
+  const makeEditApi = (crossDay: boolean): BarEditApi => ({
+    crossDay,
+    isDirty: (id) => id < 0 || id in edits,
+    isSaving: (id) => savingIds.has(id),
+    onDraw: drawBlock,
+    onBarPointerDown: (event, id) => startDrag(event, id, "move", crossDay),
+    onEdgePointerDown: (event, id, edge) => startDrag(event, id, edge, crossDay),
+    onDragMove: dragMove,
+    onDragEnd: dragEnd,
+    onCommit: commitBlock,
+    onRevert: revertBlock,
+  });
+  const dayEditApi = admin ? makeEditApi(false) : undefined;
+  const weekEditApi = admin ? makeEditApi(true) : undefined;
+
+  const byDay = useMemo(() => WEEKDAYS.map((_, index) => boardBlocks.filter(({ block }) => block.weekday === index + 1)), [boardBlocks]);
   const selectedDate = new Date(`${selectedDateValue}T12:00:00`);
   const selectedDay = (selectedDate.getDay() + 6) % 7;
   const selectedWeekMonday = getMonday(selectedDateValue);
@@ -176,17 +445,21 @@ export function PublicBoard({ today, now, people, blocks, openSessions }: { toda
       <div className="relative px-5 pb-8 sm:px-6">
         <button aria-label="Previous day" onClick={() => shiftSelectedDate(-1)} className="absolute left-1 top-1/2 z-10 flex h-10 w-10 -translate-y-1/2 items-center justify-center text-ink/35 transition hover:text-ink"><ChevronLeft size={21} strokeWidth={1.5} /></button><button aria-label="Next day" onClick={() => shiftSelectedDate(1)} className="absolute right-1 top-1/2 z-10 flex h-10 w-10 -translate-y-1/2 items-center justify-center text-ink/35 transition hover:text-ink"><ChevronRight size={21} strokeWidth={1.5} /></button>
         <span className="absolute right-0 top-[33%] z-10 flex h-11 w-11 items-center justify-center font-display text-xl font-extrabold" style={{ backgroundColor: monthAccent, color: "#FFFDF9" }} aria-label={`Month ${selectedMonth}`}>{selectedMonth}</span>
-        <div className="mx-0 grid w-full sm:w-[90%] grid-cols-[52px_16px_minmax(0,1fr)] sm:grid-cols-[82px_22px_minmax(0,1fr)]"><HourAxis /><DensityBand entries={currentEntries} color={monthAccent} /><div className="min-w-0"><DayTimeline entries={currentEntries} accent={monthAccent} currentTime={selectedDateValue === today ? clock : undefined} highlightedPeople={highlightedPeople} onToggle={togglePerson} /></div></div>
+        <div className="mx-0 grid w-full sm:w-[90%] grid-cols-[52px_16px_minmax(0,1fr)] sm:grid-cols-[82px_22px_minmax(0,1fr)]"><HourAxis /><DensityBand entries={currentEntries} color={monthAccent} /><div className="min-w-0"><DayTimeline entries={currentEntries} accent={monthAccent} currentTime={selectedDateValue === today ? clock : undefined} highlightedPeople={highlightedPeople} onToggle={togglePerson} edit={dayEditApi} weekday={selectedDay + 1} /></div></div>
       </div>
       <DayExtras selectedDate={selectedDate} selectedDay={selectedDay} blocks={blocks} today={today} onSelectDate={(date) => setSelectedDateValue(date.toISOString().slice(0, 10))} />
       <section className="weekly-spread relative px-5 pb-10 pt-8 sm:px-10 sm:pt-10">
         <div className="mb-5 flex flex-wrap items-end justify-between gap-4"><div><p className="font-display text-[11px] font-bold tracking-[.18em] text-ink/55">THE WEEK</p><div className="mt-2 flex min-h-[128px] min-w-0 max-w-[480px] flex-col justify-between border border-[#EAEAEA] bg-[#FFFDF9] lg:ml-[52px]"><div className="flex flex-1 items-center justify-center px-4 py-5"><div className="grid w-full grid-cols-[minmax(0,0.72fr)_minmax(150px,1.6fr)_minmax(0,0.72fr)] border border-[#EAEAEA] font-display leading-none" style={{ color: monthAccent }}><div className="flex flex-col items-center justify-center border-r border-[#EAEAEA] px-2 py-4 sm:px-3"><span className="whitespace-nowrap text-[11px] font-bold tracking-[.12em]">{weekStartMonth}{weekStartMonth === weekEndMonth ? "" : `–${weekEndMonth}`}</span><span className="mt-2 whitespace-nowrap text-xs font-medium tracking-[.12em]">{weekStart.getFullYear()}</span></div><div className="flex min-w-0 items-center justify-center gap-2 border-r border-[#EAEAEA] px-2 py-3 text-[3.25rem] font-extrabold tracking-[-.06em] sm:px-4 sm:text-[4rem]"><span>{weekStart.getDate()}</span><span className="font-medium text-ink/30">–</span><span>{weekEnd.getDate()}</span></div><div className="flex flex-col items-center justify-center gap-2 px-2 py-4 text-ink/70 sm:px-4"><span className="whitespace-nowrap text-2xl font-extrabold sm:text-3xl">週</span><span className="whitespace-nowrap text-[11px] font-extrabold tracking-[.16em] text-ink/65 sm:text-xs">WEEK</span></div></div></div><div className="flex flex-wrap items-center justify-between gap-3 border-t border-[#EAEAEA] px-4 py-2.5 font-display text-[10px] font-medium tracking-[.14em] text-ink/45 sm:px-5"><span className="font-extrabold tracking-[.08em] text-ink/55">{dateLabel(0)} – {dateLabel(4)}</span><span>{fullDate}</span></div></div></div><div className="flex flex-wrap items-center gap-4 text-[11px] font-medium text-ink/55"><span className="flex items-center gap-1.5"><i className="h-2.5 w-4 border-t-[3px] border-ink bg-ink/10" /> booked</span><span className="flex items-center gap-1.5"><i className="h-2.5 w-4 border-t-[3px] border-coral bg-coral/15" /> in now</span><span className="flex items-center gap-1.5"><i className="h-2.5 w-4 border-t-[2px] border-dashed border-ink bg-ink/10" /> one-off</span></div></div>
         <div className="pointer-events-none absolute inset-x-0 top-[390px] z-10 hidden justify-between lg:flex"><button type="button" onClick={() => shiftSelectedDate(-7)} className="pointer-events-auto flex h-10 w-10 items-center justify-center text-ink/35 transition hover:text-ink" aria-label="Previous week"><ChevronLeft size={21} strokeWidth={1.5} /></button><button type="button" onClick={() => shiftSelectedDate(7)} className="pointer-events-auto flex h-10 w-10 items-center justify-center text-ink/35 transition hover:text-ink" aria-label="Next week"><ChevronRight size={21} strokeWidth={1.5} /></button></div>
-        <div className="hidden overflow-hidden lg:block"><div className="grid grid-cols-[52px_repeat(5,minmax(0,1fr))] divide-x divide-ink/15"><div className="flex items-center px-2 py-3 font-display text-[10px] font-bold tracking-[.18em] text-ink/55">TIME</div>{WEEKDAYS.slice(0, 5).map((day, index) => <WeekDateBox key={day} day={day} date={new Date(dateForDay(index))} selected={highlightedDays.has(index)} accent={monthAccent} onClick={() => toggleWeekday(index)} />)}<div><HourAxis short /></div>{WEEKDAYS.slice(0, 5).map((day, index) => <div key={`timeline-${day}`} className="relative min-w-0 px-1.5" style={highlightedDays.has(index) ? { backgroundColor: wash(monthAccent, .08) } : undefined}><DayTimeline entries={byDay[index]} accent={monthAccent} currentTime={dateValueForDay(index) === today ? clock : undefined} highlightedPeople={highlightedPeople} onToggle={togglePerson} short /></div>)}</div></div>
+        <div className="hidden overflow-hidden lg:block"><div className="grid grid-cols-[52px_repeat(5,minmax(0,1fr))] divide-x divide-ink/15"><div className="flex items-center px-2 py-3 font-display text-[10px] font-bold tracking-[.18em] text-ink/55">TIME</div>{WEEKDAYS.slice(0, 5).map((day, index) => <WeekDateBox key={day} day={day} date={new Date(dateForDay(index))} selected={highlightedDays.has(index)} accent={monthAccent} onClick={() => toggleWeekday(index)} />)}<div><HourAxis short /></div>{WEEKDAYS.slice(0, 5).map((day, index) => <div key={`timeline-${day}`} className="relative min-w-0 px-1.5" style={highlightedDays.has(index) ? { backgroundColor: wash(monthAccent, .08) } : undefined}><DayTimeline entries={byDay[index]} accent={monthAccent} currentTime={dateValueForDay(index) === today ? clock : undefined} highlightedPeople={highlightedPeople} onToggle={togglePerson} edit={weekEditApi} weekday={index + 1} short /></div>)}</div></div>
         <div className="space-y-2 lg:hidden">{WEEKDAYS.slice(0, 5).map((day, index) => <div key={day} className="flex w-full items-stretch gap-2" style={highlightedDays.has(index) ? { backgroundColor: wash(monthAccent, .08) } : undefined}><WeekDateBox day={day} date={new Date(dateForDay(index))} selected={highlightedDays.has(index)} accent={monthAccent} onClick={() => toggleWeekday(index)} /><button onClick={() => setSelectedDateValue(dateValueForDay(index))} className="relative min-w-0 flex-1 px-1 text-left"><span className="relative block h-full min-h-12"><span className="absolute inset-y-0 left-0 right-0 flex items-end gap-px">{Array.from({ length: 48 }, (_, slot) => { const start = 7 * 60 + slot * 15; const count = byDay[index].filter(({ block }) => toMinutes(block.startTime) <= start && toMinutes(block.endTime) > start).length; return <i key={slot} className="flex-1 bg-slate" style={{ height: `${count ? Math.max(15, count * 24) : 0}%`, opacity: count ? .78 : 0 }} />; })}</span></span></button></div>)}</div>
         <PeoplePalette people={people} highlightedPeople={highlightedPeople} onToggle={togglePerson} />
       </section>
       <footer className="flex flex-wrap items-center justify-between gap-3 bg-paper-deep px-5 py-4 font-display text-[10px] font-medium tracking-[.14em] text-ink/50 sm:px-10"><span>RABO.YANGRAN.ORG · © Yang Ran 2026</span><span className="flex flex-wrap items-center justify-end gap-4"><span>07:00–19:00 · AMERICA/NEW_YORK</span><a href="https://rabo.yangran.org/login" className="font-medium tracking-[.08em] text-ink/35 transition hover:text-coral">管理者ログイン</a></span></footer>
     </section>
+    {admin && popover ? (() => {
+      const target = boardBlocks.find((item) => item.block.id === popover.id);
+      return target ? <AdminPopover rect={popover.rect} entry={target} people={people} isNew={popover.id < 0} busy={savingIds.has(popover.id)} onAssign={(personId) => assignPerson(popover.id, personId)} onRemove={() => removeBlock(popover.id)} onClose={() => setPopover(null)} /> : null;
+    })() : null}
   </div>;
 }
