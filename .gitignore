@@ -8,4 +8,5 @@ out/
 .agents/
 drizzle/meta/
 *.log
+*.tsbuildinfo
 .vercel
