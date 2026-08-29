@@ -23,6 +23,15 @@ npm run dev
 
 `drizzle.config.ts` prefers `DATABASE_URL_UNPOOLED` when it is available for migrations, while the app uses the pooled `DATABASE_URL`.
 
+## Data model
+
+- `person` stores lab member names, optional unique email addresses, research areas, and active/order settings. Email is only selected in private admin/report queries.
+- `weekly_block` stores recurring scheduled times with effective date ranges.
+- `lab_session` stores admin-entered or quick-logged time in the lab.
+- `progress_entry` is reserved for future admin tracking such as milestones, status, notes, and measurements.
+
+The public board uses explicit member projections that exclude email and other private fields. `/admin` and `/admin/report` are protected by Auth.js middleware and server-side session checks.
+
 ## Commands
 
 - `npm run dev` — local development
