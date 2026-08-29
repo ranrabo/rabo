@@ -3,16 +3,23 @@ import bcrypt from "bcryptjs";
 import { appUser } from "./schema";
 
 // Usage:
-//   npx tsx src/db/reset-user.ts <username> <password (>=12 chars)> [envFile]
+//   npx tsx src/db/reset-user.ts <username> <password (>=12 chars)> [envFile] --force
 // envFile defaults to .env.local. Pass e.g. .env.production.local to target prod.
-const username = process.argv[2] || "ranrabo";
-const password = process.argv[3];
-const envFile = process.argv[4] || ".env.local";
+// This DELETES EVERY row in app_user before inserting the one account, so it
+// requires an explicit --force flag.
+const args = process.argv.slice(2);
+const force = args.includes("--force");
+const [username = "ranrabo", password, envFile = ".env.local"] = args.filter((arg) => arg !== "--force");
 
 config({ path: envFile });
 
 if (!password || password.length < 12) {
-  console.error("Usage: npx tsx src/db/reset-user.ts <username> <password (>=12 chars)> [envFile]");
+  console.error("Usage: npx tsx src/db/reset-user.ts <username> <password (>=12 chars)> [envFile] --force");
+  process.exit(1);
+}
+
+if (!force) {
+  console.error(`Refusing to run without --force: this wipes ALL app_user rows (env file: ${envFile}).`);
   process.exit(1);
 }
 

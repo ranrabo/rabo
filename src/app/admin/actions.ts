@@ -1,6 +1,6 @@
 "use server";
 
-import { and, desc, eq, isNull } from "drizzle-orm";
+import { and, desc, eq, isNull, sql } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { auth } from "@/auth";
 import { db } from "@/db";
@@ -38,19 +38,35 @@ const scheduleFields = (formData: FormData) => {
   return { personId, weekday, startTime, endTime, effectiveFrom };
 };
 
+const expectedVersion = (formData: FormData) => {
+  const raw = text(formData, "version");
+  if (!raw) return null;
+  const value = Number(raw);
+  return Number.isInteger(value) && value > 0 ? value : null;
+};
+
+const STALE_MESSAGE = "This block changed since you opened it. Refresh and try again.";
+
 export const createWeeklyBlock = async (formData: FormData) => {
-  await requireAdmin();
+  const session = await requireAdmin();
   const fields = scheduleFields(formData);
-  await db.insert(weeklyBlock).values(fields);
+  await db.insert(weeklyBlock).values({ ...fields, loggedBy: session.user?.name || "Admin" });
   refresh();
 };
 
 export const updateWeeklyBlock = async (formData: FormData) => {
-  await requireAdmin();
+  const session = await requireAdmin();
   const id = Number(text(formData, "id"));
   if (!Number.isInteger(id) || id < 1) throw new Error("Choose a valid schedule block.");
   const fields = scheduleFields(formData);
-  await db.update(weeklyBlock).set(fields).where(eq(weeklyBlock.id, id));
+  const version = expectedVersion(formData);
+  const where = version === null ? eq(weeklyBlock.id, id) : and(eq(weeklyBlock.id, id), eq(weeklyBlock.version, version));
+  const saved = await db
+    .update(weeklyBlock)
+    .set({ ...fields, loggedBy: session.user?.name || "Admin", updatedAt: new Date(), version: sql`${weeklyBlock.version} + 1` })
+    .where(where)
+    .returning({ id: weeklyBlock.id });
+  if (!saved.length) throw new Error(STALE_MESSAGE);
   refresh();
 };
 
@@ -58,7 +74,10 @@ export const deleteWeeklyBlock = async (formData: FormData) => {
   await requireAdmin();
   const id = Number(text(formData, "id"));
   if (!Number.isInteger(id) || id < 1) throw new Error("Choose a valid schedule block.");
-  await db.delete(weeklyBlock).where(eq(weeklyBlock.id, id));
+  const version = expectedVersion(formData);
+  const where = version === null ? eq(weeklyBlock.id, id) : and(eq(weeklyBlock.id, id), eq(weeklyBlock.version, version));
+  const removed = await db.delete(weeklyBlock).where(where).returning({ id: weeklyBlock.id });
+  if (!removed.length) throw new Error(STALE_MESSAGE);
   refresh();
 };
 

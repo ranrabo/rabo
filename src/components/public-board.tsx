@@ -244,6 +244,7 @@ export function PublicBoard({ today, now, people, blocks, openSessions, admin = 
   const [entries, setEntries] = useState<BlockWithMember[]>(blocks);
   const [edits, setEdits] = useState<Record<number, Edit>>({});
   const [savingIds, setSavingIds] = useState<Set<number>>(new Set());
+  const [notice, setNotice] = useState<string | null>(null);
   const [popover, setPopover] = useState<{ id: number; rect: DOMRect } | null>(null);
   const dragRef = useRef<DragState | null>(null);
   const tempIdRef = useRef(-1);
@@ -331,7 +332,7 @@ export function PublicBoard({ today, now, people, blocks, openSessions, admin = 
     if (!member) return;
     const id = tempIdRef.current;
     tempIdRef.current -= 1;
-    setEntries((current) => [...current, { member, block: { id, personId: member.id, weekday, startTime: toTime(start), endTime: toTime(end), effectiveFrom: today, effectiveTo: null } }]);
+    setEntries((current) => [...current, { member, block: { id, personId: member.id, weekday, startTime: toTime(start), endTime: toTime(end), effectiveFrom: today, effectiveTo: null, version: 1, loggedBy: null, createdAt: new Date(), updatedAt: new Date() } }]);
     setEdit(id, { weekday, start, end, personId: member.id });
     setPopover({ id, rect: anchor });
   };
@@ -359,11 +360,15 @@ export function PublicBoard({ today, now, people, blocks, openSessions, admin = 
           setEntries((current) => current.filter((item) => item.block.id !== id));
         } else {
           form.set("id", String(id));
+          form.set("version", String(entry.block.version));
           await updateWeeklyBlock(form);
         }
         setEdit(id, null);
+        setNotice(null);
         setPopover((current) => current?.id === id ? null : current);
         router.refresh();
+      } catch (error) {
+        setNotice(error instanceof Error ? error.message : "Could not save that change.");
       } finally {
         setSavingIds((current) => { const nextIds = new Set(current); nextIds.delete(id); return nextIds; });
       }
@@ -377,15 +382,20 @@ export function PublicBoard({ today, now, people, blocks, openSessions, admin = 
   const removeBlock = (id: number) => {
     setPopover(null);
     if (id < 0) { revertBlock(id); return; }
+    const entry = entries.find((item) => item.block.id === id);
     const form = new FormData();
     form.set("id", String(id));
+    if (entry) form.set("version", String(entry.block.version));
     setSavingIds((current) => new Set(current).add(id));
     startSaving(async () => {
       try {
         await deleteWeeklyBlock(form);
         setEntries((current) => current.filter((item) => item.block.id !== id));
         setEdit(id, null);
+        setNotice(null);
         router.refresh();
+      } catch (error) {
+        setNotice(error instanceof Error ? error.message : "Could not remove that block.");
       } finally {
         setSavingIds((current) => { const nextIds = new Set(current); nextIds.delete(id); return nextIds; });
       }
@@ -461,5 +471,12 @@ export function PublicBoard({ today, now, people, blocks, openSessions, admin = 
       const target = boardBlocks.find((item) => item.block.id === popover.id);
       return target ? <AdminPopover rect={popover.rect} entry={target} people={people} isNew={popover.id < 0} busy={savingIds.has(popover.id)} onAssign={(personId) => assignPerson(popover.id, personId)} onRemove={() => removeBlock(popover.id)} onClose={() => setPopover(null)} /> : null;
     })() : null}
+    {admin && notice ? <div className="fixed inset-x-0 top-3 z-[60] flex justify-center px-4" role="status">
+      <div className="flex items-center gap-3 rounded-md border border-coral/40 bg-[#FFFDF9] px-3 py-2 font-display text-xs font-bold text-ink shadow-[0_12px_40px_rgba(43,41,38,.18)]">
+        <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-coral" />
+        <span>{notice}</span>
+        <button type="button" onClick={() => setNotice(null)} aria-label="Dismiss" className="text-ink/40 transition hover:text-ink"><X size={13} strokeWidth={3} /></button>
+      </div>
+    </div> : null}
   </div>;
 }

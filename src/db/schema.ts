@@ -1,6 +1,7 @@
-import { relations } from "drizzle-orm";
+import { relations, sql } from "drizzle-orm";
 import {
   boolean,
+  check,
   date,
   index,
   integer,
@@ -11,15 +12,19 @@ import {
   timestamp,
 } from "drizzle-orm/pg-core";
 
-export const person = pgTable("person", {
-  id: serial("id").primaryKey(),
-  fullName: text("full_name").notNull(),
-  email: text("email").unique(),
-  color: text("color").notNull().default("#EE7E61"),
-  researchArea: text("research_area").notNull(),
-  active: boolean("active").notNull().default(true),
-  sortOrder: integer("sort_order").notNull().default(0),
-});
+export const person = pgTable(
+  "person",
+  {
+    id: serial("id").primaryKey(),
+    fullName: text("full_name").notNull(),
+    email: text("email").unique(),
+    color: text("color").notNull().default("#EE7E61"),
+    researchArea: text("research_area").notNull(),
+    active: boolean("active").notNull().default(true),
+    sortOrder: integer("sort_order").notNull().default(0),
+  },
+  (table) => [check("person_color_hex", sql`${table.color} ~ '^#[0-9A-Fa-f]{6}$'`)],
+);
 
 export const weeklyBlock = pgTable(
   "weekly_block",
@@ -33,8 +38,17 @@ export const weeklyBlock = pgTable(
     endTime: time("end_time").notNull(),
     effectiveFrom: date("effective_from").notNull(),
     effectiveTo: date("effective_to"),
+    version: integer("version").notNull().default(1),
+    loggedBy: text("logged_by"),
+    createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { mode: "date" }).notNull().defaultNow(),
   },
-  (table) => [index("weekly_block_weekday_idx").on(table.weekday)],
+  (table) => [
+    index("weekly_block_weekday_idx").on(table.weekday),
+    check("weekly_block_weekday_range", sql`${table.weekday} between 1 and 7`),
+    check("weekly_block_time_order", sql`${table.endTime} > ${table.startTime}`),
+    check("weekly_block_effective_order", sql`${table.effectiveTo} is null or ${table.effectiveTo} >= ${table.effectiveFrom}`),
+  ],
 );
 
 export const labSession = pgTable(
