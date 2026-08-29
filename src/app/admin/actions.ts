@@ -54,6 +54,46 @@ export const createWeeklyBlock = async (formData: FormData) => {
   refresh();
 };
 
+const NEW_PERSON_COLORS = ["#EE7E61", "#459379", "#5F70B3", "#D590B6", "#B5A131", "#2095A6", "#A26A5F", "#668144", "#91517D", "#4F6E8F"];
+const weekdayOf = (dateValue: string) => ((new Date(`${dateValue}T12:00:00`).getDay() + 6) % 7) + 1;
+
+// Control-panel "add": an existing person or a brand-new one (with their weekly
+// required hours), a time range, applied either to a single calendar date or as
+// an ongoing recurring slot that starts today.
+export const addScheduleBlock = async (formData: FormData) => {
+  const session = await requireAdmin();
+  const date = /^\d{4}-\d{2}-\d{2}$/.test(text(formData, "date")) ? text(formData, "date") : getLabToday();
+  const scope = text(formData, "scope") === "term" ? "term" : "day";
+  const startTime = scheduleTime(text(formData, "startTime"), "07:00");
+  const endTime = scheduleTime(text(formData, "endTime"), "07:15");
+  if (startTime < "07:00" || endTime > "19:00" || endTime <= startTime) throw new Error("Schedule blocks must sit between 07:00 and 19:00.");
+  if ([startTime, endTime].some((value) => Number(value.slice(3)) % 15 !== 0)) throw new Error("Schedule blocks must use 15-minute increments.");
+
+  let personId = Number(text(formData, "personId"));
+  if (!Number.isInteger(personId) || personId < 1) {
+    const fullName = text(formData, "newName");
+    if (!fullName) throw new Error("Choose a person or enter a name for the new one.");
+    const requiredHours = Math.max(0, Math.min(60, Math.round(Number(text(formData, "requiredHours")) || 0)));
+    const roster = await db.select({ id: person.id }).from(person);
+    const [created] = await db
+      .insert(person)
+      .values({ fullName, researchArea: "TBD", color: NEW_PERSON_COLORS[roster.length % NEW_PERSON_COLORS.length], sortOrder: roster.length + 1, weeklyRequiredHours: requiredHours })
+      .returning({ id: person.id });
+    personId = created.id;
+  }
+
+  await db.insert(weeklyBlock).values({
+    personId,
+    weekday: weekdayOf(date),
+    startTime,
+    endTime,
+    effectiveFrom: scope === "term" ? getLabToday() : date,
+    effectiveTo: scope === "term" ? null : date,
+    loggedBy: session.user?.name || "Admin",
+  });
+  refresh();
+};
+
 export const updateWeeklyBlock = async (formData: FormData) => {
   const session = await requireAdmin();
   const id = Number(text(formData, "id"));

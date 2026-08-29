@@ -7,7 +7,7 @@ import { Check, ChevronLeft, ChevronRight, GripVertical, Pencil, Trash2, X } fro
 import type { PublicPerson, WeeklyBlock } from "@/db/schema";
 import { addDays, firstName, formatHours, formatTime, getMonday, toMinutes, WEEKDAYS } from "@/lib/utils";
 import { quoteForDate } from "@/lib/quotes";
-import { clearAttendance, confirmAttendance, createWeeklyBlock, deleteWeeklyBlock, reorderPeople, saveAdminNote, updateWeeklyBlock } from "@/app/admin/actions";
+import { addScheduleBlock, clearAttendance, confirmAttendance, createWeeklyBlock, deleteWeeklyBlock, reorderPeople, saveAdminNote, updateWeeklyBlock } from "@/app/admin/actions";
 
 type BlockWithMember = { block: WeeklyBlock; member: PublicPerson };
 type SessionWithMember = { session: { personId: number; startTime: string; endTime: string | null }; member: PublicPerson };
@@ -377,13 +377,118 @@ function AdminNote({ initial, onSave }: { initial: string; onSave: (body: string
     setStatus("saving");
     onSave(body).then(() => { savedRef.current = body; setStatus("saved"); }).catch(() => setStatus("error"));
   };
-  return <div className="px-5 pt-8 sm:px-6">
-    <div className="sm:ml-[104px] sm:max-w-2xl">
-      <div className="flex items-center justify-between">
-        <label htmlFor="admin-note" className="font-display text-[10px] font-bold uppercase tracking-[.18em] text-ink/35">Notes</label>
-        <span className="font-display text-[10px] tracking-[.1em] text-ink/30" aria-live="polite">{status === "saving" ? "saving…" : status === "saved" ? "saved" : status === "error" ? "not saved" : ""}</span>
-      </div>
-      <textarea id="admin-note" value={body} onChange={(event) => { setBody(event.target.value); setStatus("idle"); }} onBlur={commit} rows={2} placeholder="Notes for the week…" className="mt-1.5 w-full resize-y border border-ink/12 bg-[#FFFDF9] px-3 py-2 font-quote text-[13px] leading-relaxed text-ink/75 placeholder:text-ink/25 transition focus:border-ink/30 focus:outline-none sm:text-sm" />
+  return <div className="flex flex-col">
+    <div className="flex items-center justify-between">
+      <label htmlFor="admin-note" className="font-display text-[10px] font-bold uppercase tracking-[.18em] text-ink/35">Notes</label>
+      <span className="font-display text-[10px] tracking-[.1em] text-ink/30" aria-live="polite">{status === "saving" ? "saving…" : status === "saved" ? "saved" : status === "error" ? "not saved" : ""}</span>
+    </div>
+    <textarea id="admin-note" value={body} onChange={(event) => { setBody(event.target.value); setStatus("idle"); }} onBlur={commit} rows={4} placeholder="Notes for the week…" className="mt-1.5 min-h-[130px] w-full flex-1 resize-y border border-ink/12 bg-[#FFFDF9] px-3 py-2 font-quote text-[13px] leading-relaxed text-ink/75 placeholder:text-ink/25 transition focus:border-ink/30 focus:outline-none sm:text-sm" />
+  </div>;
+}
+
+function ScheduleControl({ people, selectedDateValue, selectedDay, dayEntries, onNotice, onSaved }: {
+  people: PublicPerson[];
+  selectedDateValue: string;
+  selectedDay: number;
+  dayEntries: BlockWithMember[];
+  onNotice: (message: string | null) => void;
+  onSaved: () => void;
+}) {
+  const [, run] = useTransition();
+  const [mode, setMode] = useState<"add" | "remove">("add");
+  const [personId, setPersonId] = useState(String(people[0]?.id ?? "new"));
+  const [newName, setNewName] = useState("");
+  const [requiredHours, setRequiredHours] = useState("10");
+  const [start, setStart] = useState("09:00");
+  const [end, setEnd] = useState("12:00");
+  const [scope, setScope] = useState<"day" | "term">("day");
+  const [removeId, setRemoveId] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  const isNew = personId === "new" || !people.length;
+  const slots = useMemo(() => Array.from({ length: (19 - 7) * 4 + 1 }, (_, i) => toTime(7 * 60 + i * 15)), []);
+  const dayText = new Date(`${selectedDateValue}T12:00:00`).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
+  const removable = dayEntries.filter((entry) => entry.block.id > 0);
+  const field = "border border-ink/15 bg-white px-2 py-1.5 font-display text-xs text-ink transition focus:border-ink/40 focus:outline-none";
+
+  const add = () => {
+    if (isNew && !newName.trim()) { onNotice("Enter a name for the new person."); return; }
+    if (toMinutes(end) <= toMinutes(start)) { onNotice("End time must be after the start time."); return; }
+    const form = new FormData();
+    if (isNew) { form.set("newName", newName.trim()); form.set("requiredHours", requiredHours || "0"); }
+    else form.set("personId", personId);
+    form.set("date", selectedDateValue);
+    form.set("startTime", start);
+    form.set("endTime", end);
+    form.set("scope", scope);
+    setBusy(true);
+    run(async () => {
+      try { await addScheduleBlock(form); onNotice(null); setNewName(""); if (isNew) setPersonId(String(people[0]?.id ?? "new")); onSaved(); }
+      catch (error) { onNotice(error instanceof Error ? error.message : "Could not add that block."); }
+      finally { setBusy(false); }
+    });
+  };
+  const remove = () => {
+    if (!removeId) { onNotice("Pick a block to remove."); return; }
+    const entry = removable.find((item) => String(item.block.id) === removeId);
+    const form = new FormData();
+    form.set("id", removeId);
+    if (entry) form.set("version", String(entry.block.version));
+    setBusy(true);
+    run(async () => {
+      try { await deleteWeeklyBlock(form); onNotice(null); setRemoveId(""); onSaved(); }
+      catch (error) { onNotice(error instanceof Error ? error.message : "Could not remove that block."); }
+      finally { setBusy(false); }
+    });
+  };
+
+  return <div className="flex flex-col">
+    <div className="flex items-center justify-between">
+      <span className="font-display text-[10px] font-bold uppercase tracking-[.18em] text-ink/35">Schedule</span>
+      <span className="flex gap-2">
+        {(["add", "remove"] as const).map((value) => <button key={value} type="button" onClick={() => { setMode(value); onNotice(null); }} className={`font-display text-[10px] font-bold uppercase tracking-[.12em] transition ${mode === value ? "text-ink" : "text-ink/30 hover:text-ink/60"}`}>{value}</button>)}
+      </span>
+    </div>
+    <div className="mt-1.5 flex-1 border border-ink/12 bg-[#FFFDF9] p-3">
+      {mode === "add" ? <div className="space-y-2.5">
+        <div>
+          <label className="mb-1 block font-display text-[10px] font-medium uppercase tracking-[.1em] text-ink/45">Who</label>
+          <select value={personId} onChange={(event) => setPersonId(event.target.value)} className={`${field} w-full`}>
+            {people.map((member) => <option key={member.id} value={member.id}>{member.fullName}</option>)}
+            <option value="new">＋ New person…</option>
+          </select>
+        </div>
+        {isNew ? <div>
+          <div className="flex gap-2">
+            <input value={newName} onChange={(event) => setNewName(event.target.value)} placeholder="Full name" className={`${field} min-w-0 flex-1`} />
+            <input value={requiredHours} onChange={(event) => setRequiredHours(event.target.value.replace(/\D/g, "").slice(0, 2))} inputMode="numeric" aria-label="Required hours per week" title="Required hours per week" className={`${field} w-14 shrink-0 text-center`} />
+          </div>
+          <p className="mt-1 font-display text-[9px] text-ink/40">New person — full name and required hours / week.</p>
+        </div> : null}
+        <div>
+          <label className="mb-1 block font-display text-[10px] font-medium uppercase tracking-[.1em] text-ink/45">Time</label>
+          <div className="flex items-center gap-2">
+            <select value={start} onChange={(event) => setStart(event.target.value)} className={`${field} min-w-0 flex-1`}>{slots.map((slot) => <option key={slot} value={slot}>{formatTime(slot)}</option>)}</select>
+            <span className="font-display text-[10px] text-ink/40">to</span>
+            <select value={end} onChange={(event) => setEnd(event.target.value)} className={`${field} min-w-0 flex-1`}>{slots.map((slot) => <option key={slot} value={slot}>{formatTime(slot)}</option>)}</select>
+          </div>
+        </div>
+        <div className="space-y-1 pt-0.5">
+          <label className="flex items-center gap-2 font-display text-[11px] text-ink/70"><input type="radio" name="schedule-scope" checked={scope === "day"} onChange={() => setScope("day")} className="accent-slate" /> {dayText} only</label>
+          <label className="flex items-center gap-2 font-display text-[11px] text-ink/70"><input type="radio" name="schedule-scope" checked={scope === "term"} onChange={() => setScope("term")} className="accent-slate" /> Every {WEEKDAYS[selectedDay]}, ongoing</label>
+        </div>
+        <button type="button" disabled={busy} onClick={add} className="w-full bg-ink px-3 py-2 font-display text-[11px] font-bold uppercase tracking-[.12em] text-paper-deep transition hover:bg-slate disabled:opacity-50">Add block</button>
+      </div> : <div className="space-y-2.5">
+        <div>
+          <label className="mb-1 block font-display text-[10px] font-medium uppercase tracking-[.1em] text-ink/45">Block on {dayText}</label>
+          <select value={removeId} onChange={(event) => setRemoveId(event.target.value)} className={`${field} w-full`}>
+            <option value="">Choose a block…</option>
+            {removable.map((entry) => <option key={entry.block.id} value={entry.block.id}>{firstName(entry.member.fullName)} · {formatTime(entry.block.startTime)}–{formatTime(entry.block.endTime)}</option>)}
+          </select>
+        </div>
+        <button type="button" disabled={busy || !removeId} onClick={remove} className="flex w-full items-center justify-center gap-1.5 border border-coral/40 px-3 py-2 font-display text-[11px] font-bold uppercase tracking-[.12em] text-coral transition hover:bg-coral/10 disabled:opacity-40"><Trash2 size={12} /> Remove block</button>
+        <p className="font-display text-[9px] leading-relaxed text-ink/40">Removes the recurring slot from the team schedule.</p>
+      </div>}
     </div>
   </div>;
 }
@@ -720,7 +825,12 @@ export function PublicBoard({ today, now, people, blocks, openSessions, attendan
         <span className="absolute right-0 top-[33%] z-10 flex h-11 w-11 items-center justify-center font-display text-xl font-extrabold" style={{ backgroundColor: monthAccent, color: "#FFFDF9" }} aria-label={`Month ${selectedMonth}`}>{selectedMonth}</span>
         <div className="mx-0 grid w-full sm:w-[90%] grid-cols-[52px_16px_minmax(0,1fr)] sm:grid-cols-[82px_22px_minmax(0,1fr)]"><HourAxis /><DensityBand entries={currentEntries} color={monthAccent} /><div className="min-w-0"><DayTimeline entries={currentEntries} accent={monthAccent} currentTime={selectedDateValue === today ? clock : undefined} highlightedPeople={highlightedPeople} onToggle={togglePerson} edit={dayEditApi} weekday={selectedDay + 1} /></div></div>
       </div>
-      {admin ? <AdminNote initial={adminNote} onSave={saveNote} /> : null}
+      {admin ? <div className="px-5 pt-8 sm:px-6">
+        <div className="grid items-stretch gap-6 sm:ml-[104px] lg:grid-cols-2 lg:gap-8">
+          <AdminNote initial={adminNote} onSave={saveNote} />
+          <ScheduleControl people={people} selectedDateValue={selectedDateValue} selectedDay={selectedDay} dayEntries={currentEntries} onNotice={setNotice} onSaved={() => router.refresh()} />
+        </div>
+      </div> : null}
       <DayExtras selectedDate={selectedDate} selectedDay={selectedDay} blocks={blocks} today={today} onSelectDate={(date) => setSelectedDateValue(date.toISOString().slice(0, 10))} />
       <section className="weekly-spread relative px-5 pb-10 pt-8 sm:px-10 sm:pt-10">
         <div className="mb-5 flex flex-wrap items-end justify-between gap-4"><div><p className="font-display text-[11px] font-bold tracking-[.18em] text-ink/55">THE WEEK</p><div className="mt-2 flex min-h-[128px] min-w-0 max-w-[480px] flex-col justify-between border border-[#EAEAEA] bg-[#FFFDF9] lg:ml-[52px]"><div className="flex flex-1 items-center justify-center px-4 py-5"><div className="grid w-full grid-cols-[minmax(0,0.72fr)_minmax(150px,1.6fr)_minmax(0,0.72fr)] border border-[#EAEAEA] font-display leading-none" style={{ color: monthAccent }}><div className="flex flex-col items-center justify-center border-r border-[#EAEAEA] px-2 py-4 sm:px-3"><span className="whitespace-nowrap text-[11px] font-bold tracking-[.12em]">{weekStartMonth}{weekStartMonth === weekEndMonth ? "" : `–${weekEndMonth}`}</span><span className="mt-2 whitespace-nowrap text-xs font-medium tracking-[.12em]">{weekStart.getFullYear()}</span></div><div className="flex min-w-0 items-center justify-center gap-2 border-r border-[#EAEAEA] px-2 py-3 text-[3.25rem] font-extrabold tracking-[-.06em] sm:px-4 sm:text-[4rem]"><span>{weekStart.getDate()}</span><span className="font-medium text-ink/30">–</span><span>{weekEnd.getDate()}</span></div><div className="flex flex-col items-center justify-center gap-2 px-2 py-4 text-ink/70 sm:px-4"><span className="whitespace-nowrap text-2xl font-extrabold sm:text-3xl">週</span><span className="whitespace-nowrap text-[11px] font-extrabold tracking-[.16em] text-ink/65 sm:text-xs">WEEK</span></div></div></div><div className="flex flex-wrap items-center justify-between gap-3 border-t border-[#EAEAEA] px-4 py-2.5 font-display text-[10px] font-medium tracking-[.14em] text-ink/45 sm:px-5"><span className="font-extrabold tracking-[.08em] text-ink/55">{dateLabel(0)} – {dateLabel(4)}</span><span>{fullDate}</span></div></div></div><div className="flex flex-wrap items-center gap-4 text-[11px] font-medium text-ink/55"><span className="flex items-center gap-1.5"><i className="h-2.5 w-4 border-t-[3px] border-ink bg-ink/10" /> booked</span><span className="flex items-center gap-1.5"><i className="h-2.5 w-4 border-t-[3px] border-coral bg-coral/15" /> in now</span><span className="flex items-center gap-1.5"><i className="h-2.5 w-4 border-t-[2px] border-dashed border-ink bg-ink/10" /> one-off</span></div></div>
@@ -729,7 +839,7 @@ export function PublicBoard({ today, now, people, blocks, openSessions, attendan
         <div className="space-y-2 lg:hidden">{WEEKDAYS.slice(0, 5).map((day, index) => <div key={day} className="flex w-full items-stretch gap-2" style={highlightedDays.has(index) ? { backgroundColor: wash(monthAccent, .08) } : undefined}><WeekDateBox day={day} date={new Date(dateForDay(index))} selected={highlightedDays.has(index)} accent={monthAccent} onClick={() => toggleWeekday(index)} /><button onClick={() => setSelectedDateValue(dateValueForDay(index))} className="relative min-w-0 flex-1 px-1 text-left"><span className="relative block h-full min-h-12"><span className="absolute inset-y-0 left-0 right-0 flex items-end gap-px">{Array.from({ length: 48 }, (_, slot) => { const start = 7 * 60 + slot * 15; const count = byDay[index].filter(({ block }) => toMinutes(block.startTime) <= start && toMinutes(block.endTime) > start).length; return <i key={slot} className="flex-1 bg-slate" style={{ height: `${count ? Math.max(15, count * 24) : 0}%`, opacity: count ? .78 : 0 }} />; })}</span></span></button></div>)}</div>
         <PeoplePalette people={people} blocks={boardBlocks} highlightedPeople={highlightedPeople} onToggle={togglePerson} admin={admin} onReorder={reorderPalette} confirmedHours={confirmedHoursByPerson} />
       </section>
-      <footer className="flex flex-wrap items-center justify-between gap-3 bg-paper-deep px-5 py-4 font-display text-[10px] font-medium tracking-[.14em] text-ink/50 sm:px-10"><span>RABO.YANGRAN.ORG · © Yang Ran 2026</span><span className="flex flex-wrap items-center justify-end gap-4"><span>07:00–19:00 · AMERICA/NEW_YORK</span><a href="https://rabo.yangran.org/login" className="font-medium tracking-[.08em] text-ink/35 transition hover:text-coral">管理者ログイン</a></span></footer>
+      <footer className="flex flex-wrap items-center justify-between gap-3 bg-paper-deep px-5 py-4 font-display text-[10px] font-medium tracking-[.14em] text-ink/50 sm:px-10"><span>RABO.YANGRAN.ORG · © Yang Ran 2026</span><span className="flex flex-wrap items-center justify-end gap-4"><span>07:00–19:00 · AMERICA/NEW_YORK</span>{admin ? null : <a href="https://rabo.yangran.org/login" className="font-medium tracking-[.08em] text-ink/35 transition hover:text-coral">管理者ログイン</a>}</span></footer>
     </section>
     {admin && popover ? (() => {
       const target = boardBlocks.find((item) => item.block.id === popover.id);

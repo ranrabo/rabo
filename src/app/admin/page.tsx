@@ -5,9 +5,5 @@ export const dynamic = "force-dynamic";
 
 export default async function AdminPage() {
   const { today, now, people, blocks, openSessions, attendance, adminNote } = await getHomeData();
-  return (
-    <div className="py-8">
-      <PublicBoard today={today} now={now} people={people} blocks={blocks} openSessions={openSessions} attendance={attendance} adminNote={adminNote} admin />
-    </div>
-  );
+  return <PublicBoard today={today} now={now} people={people} blocks={blocks} openSessions={openSessions} attendance={attendance} adminNote={adminNote} admin />;
 }
