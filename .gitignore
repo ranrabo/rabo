@@ -10,3 +10,4 @@ drizzle/meta/
 *.log
 *.tsbuildinfo
 .vercel
+.DS_Store
