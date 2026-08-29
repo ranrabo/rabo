@@ -111,6 +111,14 @@ export const appUser = pgTable("app_user", {
   displayName: text("display_name").notNull(),
 });
 
+// Single shared free-text scratchpad shown on the admin board (row id is always 1).
+export const adminNote = pgTable("admin_note", {
+  id: integer("id").primaryKey().default(1),
+  body: text("body").notNull().default(""),
+  updatedBy: text("updated_by"),
+  updatedAt: timestamp("updated_at", { mode: "date" }).notNull().defaultNow(),
+});
+
 export const personRelations = relations(person, ({ many }) => ({
   weeklyBlocks: many(weeklyBlock),
   labSessions: many(labSession),
@@ -140,3 +148,4 @@ export type WeeklyBlock = typeof weeklyBlock.$inferSelect;
 export type LabSession = typeof labSession.$inferSelect;
 export type ProgressEntry = typeof progressEntry.$inferSelect;
 export type BlockAttendance = typeof blockAttendance.$inferSelect;
+export type AdminNote = typeof adminNote.$inferSelect;

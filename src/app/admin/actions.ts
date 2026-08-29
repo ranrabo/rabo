@@ -4,7 +4,7 @@ import { and, desc, eq, isNull, sql } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { auth } from "@/auth";
 import { db } from "@/db";
-import { blockAttendance, labSession, person, weeklyBlock } from "@/db/schema";
+import { adminNote, blockAttendance, labSession, person, weeklyBlock } from "@/db/schema";
 import { getLabToday } from "@/lib/utils";
 
 const requireAdmin = async () => {
@@ -157,6 +157,16 @@ export const clearAttendance = async (formData: FormData) => {
   const { blockId, date } = attendanceKey(formData);
   await db.delete(blockAttendance).where(and(eq(blockAttendance.weeklyBlockId, blockId), eq(blockAttendance.attendDate, date)));
   refresh();
+};
+
+export const saveAdminNote = async (formData: FormData) => {
+  const session = await requireAdmin();
+  const body = String(formData.get("body") ?? "").slice(0, 8000);
+  await db
+    .insert(adminNote)
+    .values({ id: 1, body, updatedBy: session.user?.name || "Admin", updatedAt: new Date() })
+    .onConflictDoUpdate({ target: adminNote.id, set: { body, updatedBy: session.user?.name || "Admin", updatedAt: new Date() } });
+  revalidatePath("/admin");
 };
 
 export const reorderPeople = async (formData: FormData) => {

@@ -7,7 +7,7 @@ import { Check, ChevronLeft, ChevronRight, GripVertical, Pencil, Trash2, X } fro
 import type { PublicPerson, WeeklyBlock } from "@/db/schema";
 import { addDays, firstName, formatHours, formatTime, getMonday, toMinutes, WEEKDAYS } from "@/lib/utils";
 import { quoteForDate } from "@/lib/quotes";
-import { clearAttendance, confirmAttendance, createWeeklyBlock, deleteWeeklyBlock, reorderPeople, updateWeeklyBlock } from "@/app/admin/actions";
+import { clearAttendance, confirmAttendance, createWeeklyBlock, deleteWeeklyBlock, reorderPeople, saveAdminNote, updateWeeklyBlock } from "@/app/admin/actions";
 
 type BlockWithMember = { block: WeeklyBlock; member: PublicPerson };
 type SessionWithMember = { session: { personId: number; startTime: string; endTime: string | null }; member: PublicPerson };
@@ -83,6 +83,12 @@ const brighten = (hex: string, amount = .32) => {
   return `#${channel(16)}${channel(8)}${channel(0)}`;
 };
 
+const darken = (hex: string, amount = .16) => {
+  const n = Number.parseInt(hex.slice(1), 16);
+  const channel = (shift: number) => Math.round(((n >> shift) & 255) * (1 - amount)).toString(16).padStart(2, "0");
+  return `#${channel(16)}${channel(8)}${channel(0)}`;
+};
+
 const dayPosition = (value: string) => ((toMinutes(value) - dayStart) / daySpan) * 100;
 const timeLabel = (hour: number) => `${String(hour).padStart(2, "0")}:00`;
 
@@ -112,7 +118,12 @@ function DayExtras({ selectedDate, selectedDay, blocks, today, onSelectDate }: {
 function BlockBar({ entry, lane, laneCount, compact = false, vertical = false, highlighted, onToggle, edit }: { entry: BlockWithMember; lane: number; laneCount: number; compact?: boolean; vertical?: boolean; highlighted: boolean; onToggle: (personId: number) => void; edit?: BarEditApi }) {
   const { block, member } = entry;
   const color = member.color;
-  const barColor = highlighted ? brighten(color) : color;
+  // Resting bars sit light and translucent; a highlighted (clicked) bar goes
+  // darker and more opaque so it pops out of the grid.
+  const restFill = wash(color, .1);
+  const restStroke = wash(color, .5);
+  const highlightFill = wash(darken(color, .08), .44);
+  const highlightStroke = darken(color, .14);
   const left = compact ? "4%" : `calc(6px + ${lane} * (100% - 10px) / ${laneCount})`;
   const width = compact ? "92%" : `calc((100% - 10px) / ${laneCount} - 3px)`;
   const top = `${dayPosition(block.startTime)}%`;
@@ -136,7 +147,11 @@ function BlockBar({ entry, lane, laneCount, compact = false, vertical = false, h
         onPointerMove={edit.onDragMove}
         onPointerUp={edit.onDragEnd}
         className="absolute inset-0 touch-none cursor-grab select-none overflow-hidden rounded-[2px] border-l-[3px] px-2 py-1.5 text-left shadow-sm transition active:cursor-grabbing"
-        style={{ backgroundColor: wash(color, dirty ? .3 : confirmed ? .36 : .16), borderLeftColor: barColor, boxShadow: dirty ? `0 0 0 1px ${barColor}` : confirmed ? `inset 0 0 0 1px ${wash(barColor, .5)}` : undefined }}
+        style={{
+          backgroundColor: dirty ? wash(color, .3) : confirmed ? wash(color, .4) : highlighted ? highlightFill : restFill,
+          borderLeftColor: dirty || confirmed ? color : highlighted ? highlightStroke : restStroke,
+          boxShadow: dirty ? `0 0 0 1px ${color}` : confirmed ? `inset 0 0 0 1px ${wash(color, .5)}` : highlighted ? `0 0 0 1px ${highlightStroke}` : undefined,
+        }}
       >
         <span onPointerDown={(event) => edit.onEdgePointerDown(event, block.id, "top")} onPointerMove={edit.onDragMove} onPointerUp={edit.onDragEnd} className="absolute inset-x-0 top-0 z-[3] h-2 cursor-ns-resize touch-none" aria-hidden="true" />
         <span className={`pointer-events-none block truncate font-display text-[11px] font-bold leading-tight ${vertical ? "writing-mode-vertical [writing-mode:vertical-rl]" : ""}`}>{firstName(member.fullName)}</span>
@@ -154,7 +169,7 @@ function BlockBar({ entry, lane, laneCount, compact = false, vertical = false, h
     </div>;
   }
 
-  return <button type="button" onClick={() => onToggle(member.id)} aria-pressed={highlighted} aria-label={`Highlight ${firstName(member.fullName)}`} title={label} className="absolute z-[1] overflow-hidden rounded-[2px] border-l-[3px] px-2 py-1.5 text-left transition hover:z-10 hover:brightness-95" style={{ top, height, left, width, backgroundColor: wash(color, highlighted ? .32 : .16), borderLeftColor: barColor, boxShadow: highlighted ? `0 0 0 1px ${barColor}` : undefined }}><span className={`block truncate font-display text-[11px] font-bold leading-tight ${vertical ? "writing-mode-vertical [writing-mode:vertical-rl]" : ""}`}>{firstName(member.fullName)}</span>{vertical ? null : <span className="mt-1 block truncate text-[10px] font-medium text-ink/60">{formatTime(block.startTime)}–{formatTime(block.endTime)}</span>}</button>;
+  return <button type="button" onClick={() => onToggle(member.id)} aria-pressed={highlighted} aria-label={`Highlight ${firstName(member.fullName)}`} title={label} className="absolute z-[1] overflow-hidden rounded-[2px] border-l-[3px] px-2 py-1.5 text-left transition hover:z-10 hover:brightness-95" style={{ top, height, left, width, backgroundColor: highlighted ? highlightFill : restFill, borderLeftColor: highlighted ? highlightStroke : restStroke, boxShadow: highlighted ? `0 0 0 1px ${highlightStroke}` : undefined }}><span className={`block truncate font-display text-[11px] font-bold leading-tight ${vertical ? "writing-mode-vertical [writing-mode:vertical-rl]" : ""}`}>{firstName(member.fullName)}</span>{vertical ? null : <span className="mt-1 block truncate text-[10px] font-medium text-ink/60">{formatTime(block.startTime)}–{formatTime(block.endTime)}</span>}</button>;
 }
 
 function DayTimeline({ entries, mobile = false, short = false, accent, currentTime, highlightedPeople, onToggle, edit, weekday }: { entries: BlockWithMember[]; mobile?: boolean; short?: boolean; accent: string; currentTime?: string; highlightedPeople: Set<number>; onToggle: (personId: number) => void; edit?: BarEditApi; weekday?: number }) {
@@ -323,7 +338,30 @@ function AdminPopover({ rect, entry, people, isNew, busy, onAssign, onRemove, on
   </>;
 }
 
-export function PublicBoard({ today, now, people, blocks, openSessions, attendance = [], admin = false }: { today: string; now: string; people: PublicPerson[]; blocks: BlockWithMember[]; openSessions: SessionWithMember[]; attendance?: { weeklyBlockId: number; attendDate: string }[]; admin?: boolean }) {
+function AdminNote({ initial, onSave }: { initial: string; onSave: (body: string) => Promise<void> }) {
+  const [body, setBody] = useState(initial);
+  const [status, setStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
+  const savedRef = useRef(initial);
+  // Only adopt an external change; a refresh that returns our own last-saved text
+  // must not clobber whatever the admin is currently typing.
+  useEffect(() => { if (initial !== savedRef.current) { savedRef.current = initial; setBody(initial); } }, [initial]);
+  const commit = () => {
+    if (body === savedRef.current) return;
+    setStatus("saving");
+    onSave(body).then(() => { savedRef.current = body; setStatus("saved"); }).catch(() => setStatus("error"));
+  };
+  return <div className="px-5 pt-8 sm:px-6">
+    <div className="sm:ml-[104px] sm:max-w-2xl">
+      <div className="flex items-center justify-between">
+        <label htmlFor="admin-note" className="font-display text-[10px] font-bold uppercase tracking-[.18em] text-ink/35">Notes</label>
+        <span className="font-display text-[10px] tracking-[.1em] text-ink/30" aria-live="polite">{status === "saving" ? "saving…" : status === "saved" ? "saved" : status === "error" ? "not saved" : ""}</span>
+      </div>
+      <textarea id="admin-note" value={body} onChange={(event) => { setBody(event.target.value); setStatus("idle"); }} onBlur={commit} rows={2} placeholder="Notes for the week…" className="mt-1.5 w-full resize-y border border-ink/12 bg-[#FFFDF9] px-3 py-2 font-quote text-[13px] leading-relaxed text-ink/75 placeholder:text-ink/25 transition focus:border-ink/30 focus:outline-none sm:text-sm" />
+    </div>
+  </div>;
+}
+
+export function PublicBoard({ today, now, people, blocks, openSessions, attendance = [], adminNote = "", admin = false }: { today: string; now: string; people: PublicPerson[]; blocks: BlockWithMember[]; openSessions: SessionWithMember[]; attendance?: { weeklyBlockId: number; attendDate: string }[]; adminNote?: string; admin?: boolean }) {
   const router = useRouter();
   const [, startSaving] = useTransition();
   const [selectedDateValue, setSelectedDateValue] = useState(today);
@@ -552,6 +590,17 @@ export function PublicBoard({ today, now, people, blocks, openSessions, attendan
       }
     });
   };
+  const saveNote = async (body: string) => {
+    const form = new FormData();
+    form.set("body", body);
+    try {
+      await saveAdminNote(form);
+      setNotice(null);
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : "Could not save the note.");
+      throw error;
+    }
+  };
   const reorderPalette = (ids: number[]) => {
     if (!admin) return;
     const form = new FormData();
@@ -627,6 +676,7 @@ export function PublicBoard({ today, now, people, blocks, openSessions, attendan
         <span className="absolute right-0 top-[33%] z-10 flex h-11 w-11 items-center justify-center font-display text-xl font-extrabold" style={{ backgroundColor: monthAccent, color: "#FFFDF9" }} aria-label={`Month ${selectedMonth}`}>{selectedMonth}</span>
         <div className="mx-0 grid w-full sm:w-[90%] grid-cols-[52px_16px_minmax(0,1fr)] sm:grid-cols-[82px_22px_minmax(0,1fr)]"><HourAxis /><DensityBand entries={currentEntries} color={monthAccent} /><div className="min-w-0"><DayTimeline entries={currentEntries} accent={monthAccent} currentTime={selectedDateValue === today ? clock : undefined} highlightedPeople={highlightedPeople} onToggle={togglePerson} edit={dayEditApi} weekday={selectedDay + 1} /></div></div>
       </div>
+      {admin ? <AdminNote initial={adminNote} onSave={saveNote} /> : null}
       <DayExtras selectedDate={selectedDate} selectedDay={selectedDay} blocks={blocks} today={today} onSelectDate={(date) => setSelectedDateValue(date.toISOString().slice(0, 10))} />
       <section className="weekly-spread relative px-5 pb-10 pt-8 sm:px-10 sm:pt-10">
         <div className="mb-5 flex flex-wrap items-end justify-between gap-4"><div><p className="font-display text-[11px] font-bold tracking-[.18em] text-ink/55">THE WEEK</p><div className="mt-2 flex min-h-[128px] min-w-0 max-w-[480px] flex-col justify-between border border-[#EAEAEA] bg-[#FFFDF9] lg:ml-[52px]"><div className="flex flex-1 items-center justify-center px-4 py-5"><div className="grid w-full grid-cols-[minmax(0,0.72fr)_minmax(150px,1.6fr)_minmax(0,0.72fr)] border border-[#EAEAEA] font-display leading-none" style={{ color: monthAccent }}><div className="flex flex-col items-center justify-center border-r border-[#EAEAEA] px-2 py-4 sm:px-3"><span className="whitespace-nowrap text-[11px] font-bold tracking-[.12em]">{weekStartMonth}{weekStartMonth === weekEndMonth ? "" : `–${weekEndMonth}`}</span><span className="mt-2 whitespace-nowrap text-xs font-medium tracking-[.12em]">{weekStart.getFullYear()}</span></div><div className="flex min-w-0 items-center justify-center gap-2 border-r border-[#EAEAEA] px-2 py-3 text-[3.25rem] font-extrabold tracking-[-.06em] sm:px-4 sm:text-[4rem]"><span>{weekStart.getDate()}</span><span className="font-medium text-ink/30">–</span><span>{weekEnd.getDate()}</span></div><div className="flex flex-col items-center justify-center gap-2 px-2 py-4 text-ink/70 sm:px-4"><span className="whitespace-nowrap text-2xl font-extrabold sm:text-3xl">週</span><span className="whitespace-nowrap text-[11px] font-extrabold tracking-[.16em] text-ink/65 sm:text-xs">WEEK</span></div></div></div><div className="flex flex-wrap items-center justify-between gap-3 border-t border-[#EAEAEA] px-4 py-2.5 font-display text-[10px] font-medium tracking-[.14em] text-ink/45 sm:px-5"><span className="font-extrabold tracking-[.08em] text-ink/55">{dateLabel(0)} – {dateLabel(4)}</span><span>{fullDate}</span></div></div></div><div className="flex flex-wrap items-center gap-4 text-[11px] font-medium text-ink/55"><span className="flex items-center gap-1.5"><i className="h-2.5 w-4 border-t-[3px] border-ink bg-ink/10" /> booked</span><span className="flex items-center gap-1.5"><i className="h-2.5 w-4 border-t-[3px] border-coral bg-coral/15" /> in now</span><span className="flex items-center gap-1.5"><i className="h-2.5 w-4 border-t-[2px] border-dashed border-ink bg-ink/10" /> one-off</span></div></div>
