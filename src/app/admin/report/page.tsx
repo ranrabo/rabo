@@ -2,6 +2,7 @@ import Link from "next/link";
 import { ArrowLeft, CalendarRange } from "lucide-react";
 import { getReportData } from "@/lib/data";
 import { addDays, formatHours, getMonday, getLabToday, hoursBetween } from "@/lib/utils";
+import { isLabDate } from "@/lib/term";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -9,11 +10,13 @@ import { CsvDownload, type CsvRow } from "@/components/csv-download";
 
 export const dynamic = "force-dynamic";
 
+// Scheduled weekday occurrences in the range, skipping days the lab is closed
+// (out of term, breaks, holidays) so those don't inflate the scheduled total.
 const countWeekday = (from: string, to: string, weekday: number) => {
   let count = 0;
   for (let current = from; current <= to; current = addDays(current, 1)) {
     const day = new Date(`${current}T12:00:00`).getDay();
-    if ((day === 0 ? 6 : day - 1) === weekday) count += 1;
+    if ((day === 0 ? 6 : day - 1) === weekday && isLabDate(current)) count += 1;
   }
   return count;
 };
