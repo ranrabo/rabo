@@ -505,7 +505,9 @@ export function PublicBoard({ today, now, people, blocks, openSessions, attendan
   // Seed from ?d= so a post-save router.refresh() (or a remount) keeps the board
   // on the day the admin was editing instead of snapping back to today.
   const [selectedDateValue, setSelectedDateValue] = useState(() => {
-    const fromUrl = searchParams.get("d");
+    // useSearchParams() can be null on the first client render (CSR bail-out),
+    // so read it defensively.
+    const fromUrl = searchParams?.get("d");
     return fromUrl && /^\d{4}-\d{2}-\d{2}$/.test(fromUrl) ? fromUrl : today;
   });
   const [clock, setClock] = useState(now);
@@ -533,13 +535,15 @@ export function PublicBoard({ today, now, people, blocks, openSessions, attendan
     });
   }, [confirmedSet]);
   useEffect(() => {
+    if (!searchParams) return;
     const current = searchParams.get("d") ?? "";
     const desired = selectedDateValue === today ? "" : selectedDateValue;
     if (current === desired) return;
     const params = new URLSearchParams(Array.from(searchParams.entries()));
     if (desired) params.set("d", desired); else params.delete("d");
     const query = params.toString();
-    router.replace(query ? `${pathname}?${query}` : pathname, { scroll: false });
+    const base = pathname ?? (typeof window !== "undefined" ? window.location.pathname : "/");
+    router.replace(query ? `${base}?${query}` : base, { scroll: false });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedDateValue, today]);
   useEffect(() => {

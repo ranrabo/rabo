@@ -43,11 +43,14 @@ To use separate local and hosted databases, give each environment its own ignore
 # local database
 npx drizzle-kit push --config drizzle.config.ts
 
-# another environment, using its env file
-npx dotenv -e .env.production.local -- npx drizzle-kit push --config drizzle.config.ts
+# another environment, after loading its env file in the current shell
+set -a
+source .env.production.local
+set +a
+npm run db:push
 ```
 
-The second command requires a dotenv CLI if it is not already available. Alternatively, load the target environment variables in the shell before running `npm run db:push`. Verify `DATABASE_URL` points to the intended database before any write operation.
+Verify `DATABASE_URL` points to the intended database before any write operation. Do not echo the loaded variables or commit the environment file.
 
 The repository’s generated SQL describes schema changes; the current package scripts use Drizzle Kit’s push workflow rather than a separate migration-apply script. Keep schema changes in `src/db/schema.ts`, review generated SQL, and test against a non-production database before changing a shared or production database.
 
