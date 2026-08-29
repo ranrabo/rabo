@@ -15,6 +15,7 @@ export const person = pgTable("person", {
   id: serial("id").primaryKey(),
   fullName: text("full_name").notNull(),
   email: text("email").unique(),
+  color: text("color").notNull().default("#EE7E61"),
   researchArea: text("research_area").notNull(),
   active: boolean("active").notNull().default(true),
   sortOrder: integer("sort_order").notNull().default(0),
@@ -97,7 +98,7 @@ export const progressEntryRelations = relations(progressEntry, ({ one }) => ({
 }));
 
 export type Person = typeof person.$inferSelect;
-export type PublicPerson = Pick<Person, "id" | "fullName" | "researchArea" | "active" | "sortOrder">;
+export type PublicPerson = Pick<Person, "id" | "fullName" | "researchArea" | "active" | "sortOrder" | "color">;
 export type WeeklyBlock = typeof weeklyBlock.$inferSelect;
 export type LabSession = typeof labSession.$inferSelect;
 export type ProgressEntry = typeof progressEntry.$inferSelect;

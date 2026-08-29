@@ -7,6 +7,7 @@ const publicMember = {
   id: person.id,
   fullName: person.fullName,
   researchArea: person.researchArea,
+  color: person.color,
   active: person.active,
   sortOrder: person.sortOrder,
 };
