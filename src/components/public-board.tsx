@@ -949,7 +949,7 @@ export function PublicBoard({ today, now, people, blocks, openSessions, attendan
         </div>
         <PeoplePalette people={people} blocks={boardBlocks} highlightedPeople={highlightedPeople} onToggle={togglePerson} admin={admin} onReorder={reorderPalette} confirmedHours={confirmedHoursByPerson} />
       </section>
-      <footer className="flex flex-wrap items-center justify-between gap-3 bg-paper-deep px-5 py-4 font-display text-[10px] font-medium tracking-[.14em] text-ink/50 sm:px-10"><span>RABO.YANGRAN.ORG · © Yang Ran 2026</span><span className="flex flex-wrap items-center justify-end gap-4"><FooterWeather />{admin ? null : <a href="https://rabo.yangran.org/login" className="hidden font-medium tracking-[.08em] text-ink/35 transition hover:text-coral sm:inline">管理者ログイン</a>}</span></footer>
+      <footer className="flex flex-wrap items-center justify-between gap-3 bg-paper-deep px-5 py-4 font-display text-[10px] font-medium tracking-[.14em] text-ink/50 sm:px-10"><span>RABO.YANGRAN.ORG · © Yang Ran 2026</span><span className="flex flex-wrap items-center justify-end gap-4"><FooterWeather /></span></footer>
     </section>
     {admin && popover ? (() => {
       const target = boardBlocks.find((item) => item.block.id === popover.id);
