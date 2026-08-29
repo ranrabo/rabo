@@ -185,15 +185,14 @@ function DayTimeline({ entries, mobile = false, short = false, accent, currentTi
   const maxLane = Math.max(lanes.length, 1);
   // Horizontal rules are sized as fractions of the timeline height (12 hours,
   // 07:00–19:00) so they line up with the HourAxis labels and the block bars,
-  // which are all positioned by percentage. Pixel-based spacing drifts because
-  // the container height is a responsive clamp().
-  // Horizontal hour rules on every timeline. The faint vertical ruling is only
-  // for the wide single-day view — on the narrow weekly columns it collides with
-  // the column dividers and reads as doubled lines.
+  // which are all positioned by percentage. The weekly and day grids share the
+  // exact same planner ruling — day and week timeline heights are both multiples
+  // of 48 so calc(100% / 48) lands on whole pixels and the rules stay aligned
+  // with the hour ticks instead of drifting.
   const columnRule = mobile ? 22 : 26;
-  const verticalRule = short ? "" : `,repeating-linear-gradient(to right, ${wash(accent, .13)} 0 1px, transparent 1px ${columnRule}px)`;
+  const verticalRule = `,repeating-linear-gradient(to right, ${wash(accent, .13)} 0 1px, transparent 1px ${columnRule}px)`;
   const plannerGrid = `linear-gradient(to bottom, ${wash(accent, .36)} 0 1px, transparent 1px),linear-gradient(to bottom, ${wash(accent, .22)} 0 1px, transparent 1px),linear-gradient(to bottom, ${wash(accent, .13)} 0 1px, transparent 1px)${verticalRule}`;
-  const plannerSize = `100% calc(100% / 6),100% calc(100% / 12),100% calc(100% / 48)${short ? "" : ",100% 100%"}`;
+  const plannerSize = `100% calc(100% / 6),100% calc(100% / 12),100% calc(100% / 48),100% 100%`;
   const canDraw = Boolean(edit && weekday);
   const minuteAt = (clientY: number, element: HTMLElement) => {
     const rect = element.getBoundingClientRect();
