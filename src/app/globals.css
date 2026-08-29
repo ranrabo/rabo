@@ -111,13 +111,16 @@ button, a, input, select, textarea { -webkit-tap-highlight-color: transparent; }
 .weekly-spread > div:first-child > div:first-child > div.mt-2 > div:last-child { display: none; }
 .weekly-spread > .hidden > .grid > div:first-child { font-size: 0; }
 .weekly-spread > div:first-child > div:last-child { display: none; }
-.day-grid-height, .day-timeline { height: clamp(460px, 110vw, 600px); }
-/* 480 = 48 × 10, so the 15-minute / hourly planner rules land on whole pixels
-   and stay aligned with the hour ticks (see plannerSize in public-board). */
+/* Heights are fixed multiples of 48 so `calc(100% / 48)` (the 15-minute planner
+   rules) lands on whole pixels and stays aligned with the hour ticks. A fluid
+   vw/clamp height rounds to a fractional pixel count, which makes the repeating
+   grid lines drift, double up, and fall out of sync with the HourAxis labels.
+   480 = 48 × 10, 624 = 48 × 13 (see plannerSize in public-board). */
+.day-grid-height, .day-timeline { height: 528px; }
 .weekly-grid-height, .weekly-day-grid { height: 480px; }
 
 @media (min-width: 768px) {
-  .day-grid-height, .day-timeline { height: clamp(560px, 52vw, 720px); }
+  .day-grid-height, .day-timeline { height: 624px; }
 }
 
 @media (prefers-reduced-motion: reduce) {
