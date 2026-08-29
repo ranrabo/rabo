@@ -1,13 +1,14 @@
+@import url('https://fonts.googleapis.com/css2?family=M+PLUS+1:wght@400;500;700;800;900&family=Zen+Kaku+Gothic+New:wght@400;500;700&display=swap');
 @import "tailwindcss";
 
 :root {
-  --paper: #f5f3ec;
-  --paper-deep: #eae8df;
-  --ink: #142026;
-  --slate: #102a33;
-  --aqua: #69d3c6;
-  --coral: #ff7452;
-  --periwinkle: #b9c6ff;
+  --paper: #d5d9d0;
+  --paper-deep: #f7f4ee;
+  --ink: #2b2926;
+  --slate: #2f6e7e;
+  --aqua: #b9c9c1;
+  --coral: #e0525a;
+  --periwinkle: #c1c8be;
 }
 
 @theme inline {
@@ -18,20 +19,20 @@
   --color-aqua: var(--aqua);
   --color-coral: var(--coral);
   --color-periwinkle: var(--periwinkle);
-  --font-display: "Space Grotesk", ui-sans-serif, sans-serif;
-  --font-body: "DM Sans", ui-sans-serif, sans-serif;
+  --font-display: "M PLUS 1", ui-sans-serif, sans-serif;
+  --font-body: "Zen Kaku Gothic New", ui-sans-serif, sans-serif;
 }
 
 * { box-sizing: border-box; }
 html { background: var(--paper); }
-body { margin: 0; background: var(--paper); color: var(--ink); font-family: "DM Sans", ui-sans-serif, sans-serif; }
+body { margin: 0; background: var(--paper); color: var(--ink); font-family: "Zen Kaku Gothic New", ui-sans-serif, sans-serif; -webkit-font-smoothing: antialiased; }
 a { color: inherit; text-decoration: none; }
 button, a, input, select, textarea { -webkit-tap-highlight-color: transparent; }
 :focus-visible { outline: 2px solid var(--aqua); outline-offset: 3px; }
 
-.grid-paper { background-image: linear-gradient(to right, rgba(20,32,38,.06) 1px, transparent 1px), linear-gradient(to bottom, rgba(20,32,38,.06) 1px, transparent 1px); background-size: 24px 24px; }
-.hairline { border-color: rgba(20,32,38,.14); }
-.display { font-family: "Space Grotesk", ui-sans-serif, sans-serif; letter-spacing: -.045em; }
+.display { font-family: "M PLUS 1", ui-sans-serif, sans-serif; letter-spacing: -.045em; }
+.grid-paper { background-image: linear-gradient(to bottom, rgba(43,41,38,.1) 1px, transparent 1px); background-size: 100% 20%; }
+.hairline { border-color: rgba(43,41,38,.18); }
 .safe-bottom { padding-bottom: max(1.25rem, env(safe-area-inset-bottom)); }
 
 @media (prefers-reduced-motion: reduce) {

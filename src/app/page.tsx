@@ -12,9 +12,8 @@ export default async function HomePage() {
   const { today, now, todayWeekday, people, blocks, openSessions } = await getHomeData();
   const todayBlocks = blocks.filter(({ block }) => block.weekday === todayWeekday + 1);
   return <div className="mx-auto max-w-[1200px] px-5 pb-20 sm:px-8">
-    <section className="relative overflow-hidden border-b border-ink/15 py-12 sm:py-20">
-      <div className="absolute -right-20 -top-24 h-64 w-64 rounded-full border-[30px] border-coral/20" />
-      <div className="relative max-w-3xl"><p className="mb-5 flex items-center gap-2 text-[11px] font-bold uppercase tracking-[.18em] text-coral"><span className="h-2 w-2 rounded-full bg-coral" /> Shared room, shared rhythm</p><h1 className="display max-w-2xl text-[clamp(3.5rem,9vw,7.8rem)] font-bold leading-[.86]">Who’s in<br /><span className="text-slate">the lab<span className="text-coral">?</span></span></h1><p className="mt-8 max-w-md text-base leading-7 text-ink/65">A living view of the week in our shared research space. Check the current room rhythm, then find a person’s area of work.</p></div>
+    <section className="border-b border-ink/15 py-12 sm:py-16">
+      <div className="max-w-3xl"><p className="mb-4 text-[11px] font-bold uppercase tracking-[.2em] text-ink/55">ランラボ ／ RABO.YANGRAN.ORG</p><h1 className="display max-w-2xl text-[clamp(3.3rem,8vw,6.5rem)] font-extrabold leading-[.9]">Public board</h1><p className="mt-6 max-w-xl text-base leading-7 text-ink/65">A day page, then the weekly spread. See who is in the room now, then scan the shape of the week.</p></div>
     </section>
 
     <section className="border-b border-ink/15 py-10 sm:py-14"><div className="flex flex-wrap items-end justify-between gap-4"><div><p className="text-[11px] font-bold uppercase tracking-[.18em] text-coral">01 / Right now</p><h2 className="display mt-2 text-3xl font-bold sm:text-4xl">Today in the room</h2></div><p className="flex items-center gap-2 text-sm font-semibold text-ink/55"><CalendarDays size={16} /> {formatDate(today)}</p></div><NowInLab initialTime={now} openSessions={openSessions} todayBlocks={todayBlocks} /></section>
