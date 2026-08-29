@@ -386,7 +386,7 @@ function AdminNote({ initial, onSave }: { initial: string; onSave: (body: string
       <label htmlFor="admin-note" className="font-display text-[10px] font-bold uppercase tracking-[.18em] text-ink/35">Notes</label>
       <span className="font-display text-[10px] tracking-[.1em] text-ink/30" aria-live="polite">{status === "saving" ? "saving…" : status === "saved" ? "saved" : status === "error" ? "not saved" : ""}</span>
     </div>
-    <textarea id="admin-note" value={body} onChange={(event) => { setBody(event.target.value); setStatus("idle"); }} onBlur={commit} rows={4} placeholder="Notes for the week…" className="mt-1.5 min-h-[130px] w-full flex-1 resize-y border border-ink/12 bg-[#FFFDF9] px-3 py-2 font-quote text-[13px] leading-relaxed text-ink/75 placeholder:text-ink/25 transition focus:border-ink/30 focus:outline-none sm:text-sm" />
+    <textarea id="admin-note" value={body} onChange={(event) => { setBody(event.target.value); setStatus("idle"); }} onBlur={commit} rows={4} placeholder="Notes for the week…" className="mt-1.5 min-h-[130px] w-full flex-1 resize-y border border-ink/15 bg-white px-3 py-2 font-quote text-[13px] leading-relaxed text-ink/75 placeholder:text-ink/25 transition focus:border-ink/40 focus:outline-none sm:text-sm" />
   </div>;
 }
 
