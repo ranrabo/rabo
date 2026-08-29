@@ -76,14 +76,14 @@ export default async function LoginPage({ searchParams }: { searchParams: Promis
               <Button type="submit" className="mt-1 w-full bg-slate hover:bg-ink"><LockKeyhole size={16} /> Enter admin</Button>
             </form>
           </>}
-          <Link href="/" className="mt-5 inline-flex items-center gap-2 text-[12px] font-bold text-ink/45 transition hover:text-coral"><ArrowLeft size={14} /> Back to public schedule</Link>
+          <Link href="/" className="mt-5 inline-flex items-center gap-2 text-[12px] font-bold text-ink/45 transition hover:text-coral"><ArrowLeft size={14} /> Back to schedule</Link>
         </div>
       </div>
 
       {/* Hobonichi daily quote */}
-      <figure className="mt-6 max-w-[300px] border-t border-ink/15 pt-3">
-        <blockquote className="font-display text-[11px] font-medium leading-[1.55] text-ink/55">{quote.text}</blockquote>
-        <figcaption className="mt-2 font-display text-[10px] font-bold tracking-[.06em] text-ink/40">— {quote.source}</figcaption>
+      <figure className="mt-6 max-w-[320px] border-t border-ink/15 pt-3">
+        <blockquote className="font-quote text-[12px] font-normal leading-[1.65] text-ink/55">{quote.text}</blockquote>
+        <figcaption className="mt-2 font-display text-[10px] font-bold uppercase tracking-[.08em] text-ink/40">— {quote.source}</figcaption>
       </figure>
 
       {/* month tab */}

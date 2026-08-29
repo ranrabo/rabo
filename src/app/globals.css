@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=M+PLUS+1:wght@400;500;700;800;900&family=Zen+Kaku+Gothic+New:wght@400;500;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=M+PLUS+1:wght@400;500;700;800;900&family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;1,6..72,400&family=Zen+Kaku+Gothic+New:wght@400;500;700&display=swap');
 @import "tailwindcss";
 
 :root {
@@ -21,6 +21,7 @@
   --color-periwinkle: var(--periwinkle);
   --font-display: "M PLUS 1", ui-sans-serif, sans-serif;
   --font-body: "Zen Kaku Gothic New", ui-sans-serif, sans-serif;
+  --font-quote: "Newsreader", ui-serif, Georgia, serif;
 }
 
 * { box-sizing: border-box; }
