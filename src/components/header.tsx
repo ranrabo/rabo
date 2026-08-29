@@ -1,5 +1,4 @@
 import Link from "next/link";
-import { ArrowUpRight } from "lucide-react";
 
 export const Header = () => (
   <header className="border-b border-ink/20 bg-paper-deep">
@@ -10,7 +9,6 @@ export const Header = () => (
       </Link>
       <nav className="flex items-center gap-3 text-sm font-semibold text-ink/65 sm:gap-6">
         <Link href="/" className="hidden transition hover:text-ink sm:block">Schedule</Link>
-        <Link href="/admin" className="group flex items-center gap-1 rounded border border-ink/35 px-3 py-2 transition hover:border-ink hover:bg-white/50">Admin <ArrowUpRight size={14} className="transition-transform group-hover:translate-x-0.5 group-hover:-translate-y-0.5" /></Link>
       </nav>
     </div>
   </header>

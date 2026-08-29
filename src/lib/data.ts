@@ -1,6 +1,6 @@
-import { and, asc, eq, gte, isNull, lte, or } from "drizzle-orm";
+import { and, asc, desc, eq, gte, isNull, lte, or } from "drizzle-orm";
 import { db } from "@/db";
-import { blockAttendance, labSession, person, weeklyBlock } from "@/db/schema";
+import { adminLog, blockAttendance, labSession, person, weeklyBlock } from "@/db/schema";
 import { addDays, getLabNow, getLabToday, getMonday, getWeekdayIndex } from "@/lib/utils";
 
 const publicMember = {
@@ -37,6 +37,12 @@ export const getHomeData = async () => {
   ]);
 
   return { today, monday, now: getLabNow(), todayWeekday: getWeekdayIndex(today), people, blocks, openSessions, attendance };
+};
+
+// Recent admin activity for the system-log strip on the admin pages.
+export const getAdminLog = async (days = 7) => {
+  const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
+  return db.select().from(adminLog).where(gte(adminLog.createdAt, since)).orderBy(desc(adminLog.createdAt)).limit(400);
 };
 
 export const getAdminToday = async () => {

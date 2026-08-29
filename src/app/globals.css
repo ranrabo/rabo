@@ -91,6 +91,23 @@ button, a, input, select, textarea { -webkit-tap-highlight-color: transparent; }
 .admin-mode-copy { font-size: .72rem; }
 .admin-mode-signout { display: inline-flex; align-items: center; gap: .35rem; border: 1px solid rgba(224,82,90,.38); background: rgba(224,82,90,.08); padding: .4rem .65rem; color: rgba(43,41,38,.68); font-size: .72rem; font-weight: 800; white-space: nowrap; transition: background .2s ease, border-color .2s ease, color .2s ease; }
 .admin-mode-signout:hover { border-color: var(--coral); background: rgba(224,82,90,.16); color: var(--coral); }
+
+/* System log — plain text, edges aligned with the admin bar / board card. */
+.admin-log { width: min(100% - 2rem, 1280px); margin: -.25rem auto .75rem; font-family: "M PLUS 1", ui-sans-serif, sans-serif; color: rgba(43,41,38,.6); }
+@media (min-width: 640px) { .admin-log { width: min(100% - 4rem, 1280px); } }
+.admin-log-empty, .admin-log-summary { font-size: .62rem; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: rgba(43,41,38,.4); }
+.admin-log-summary { cursor: pointer; list-style: none; padding: .3rem 0; user-select: none; }
+.admin-log-summary::-webkit-details-marker { display: none; }
+.admin-log-summary::before { content: "▸ "; }
+.admin-log[open] .admin-log-summary::before { content: "▾ "; }
+.admin-log-body { max-height: 40vh; overflow-y: auto; border: 1px solid rgba(43,41,38,.12); background: rgba(255,253,249,.85); padding: .5rem .75rem; }
+.admin-log-group { margin-bottom: .5rem; }
+.admin-log-group:last-child { margin-bottom: 0; }
+.admin-log-day { font-size: .58rem; font-weight: 800; letter-spacing: .12em; text-transform: uppercase; color: var(--coral); margin: .35rem 0 .15rem; }
+.admin-log-line { display: flex; gap: .6rem; align-items: baseline; font-size: .72rem; line-height: 1.5; padding: .05rem 0; }
+.admin-log-time { flex: none; font-variant-numeric: tabular-nums; color: rgba(43,41,38,.45); }
+.admin-log-actor { flex: none; font-weight: 700; color: rgba(43,41,38,.7); }
+.admin-log-what { min-width: 0; color: rgba(43,41,38,.6); }
 .weekly-spread > div:first-child > div:first-child > div.mt-2 > div:last-child { display: none; }
 .weekly-spread > .hidden > .grid > div:first-child { font-size: 0; }
 .weekly-spread > div:first-child > div:last-child { display: none; }

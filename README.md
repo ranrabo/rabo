@@ -5,7 +5,7 @@ Rabo is a shared lab-room schedule and occupancy log. The public board shows the
 ## What the app does
 
 - `/` — public read-only weekly schedule, daily view, calendar navigation, current open sessions, and member highlighting.
-- `/login` — admin sign-in. On an empty database, the first visit can create the initial account with a password of at least 12 characters.
+- `/login` — sign-in entry point for the private area. On an empty database, the first visit can create the initial account with a password of at least 12 characters. The deployed entry point is `rabo.yangran.org/login`.
 
 The app uses `America/New_York` for “today” and the live clock. Schedule blocks use 15-minute increments between 07:00 and 19:00.
 

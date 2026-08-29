@@ -119,6 +119,19 @@ export const adminNote = pgTable("admin_note", {
   updatedAt: timestamp("updated_at", { mode: "date" }).notNull().defaultNow(),
 });
 
+// Append-only trail of what each admin changed, shown as the system log.
+export const adminLog = pgTable(
+  "admin_log",
+  {
+    id: serial("id").primaryKey(),
+    actor: text("actor").notNull(),
+    action: text("action").notNull(),
+    detail: text("detail").notNull().default(""),
+    createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
+  },
+  (table) => [index("admin_log_created_idx").on(table.createdAt)],
+);
+
 export const personRelations = relations(person, ({ many }) => ({
   weeklyBlocks: many(weeklyBlock),
   labSessions: many(labSession),
@@ -149,3 +162,4 @@ export type LabSession = typeof labSession.$inferSelect;
 export type ProgressEntry = typeof progressEntry.$inferSelect;
 export type BlockAttendance = typeof blockAttendance.$inferSelect;
 export type AdminNote = typeof adminNote.$inferSelect;
+export type AdminLog = typeof adminLog.$inferSelect;
