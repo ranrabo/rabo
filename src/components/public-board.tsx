@@ -5,21 +5,13 @@ import { useEffect, useMemo, useState } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import type { PublicPerson, WeeklyBlock } from "@/db/schema";
 import { addDays, firstName, formatTime, getMonday, toMinutes, WEEKDAYS } from "@/lib/utils";
+import { quoteForDate } from "@/lib/quotes";
 
 type BlockWithMember = { block: WeeklyBlock; member: PublicPerson };
 type SessionWithMember = { session: { personId: number; startTime: string; endTime: string | null }; member: PublicPerson };
 
 const hues = ["#EE7E61", "#A47351", "#D590B6", "#F28D9D", "#B5A131", "#459379", "#2095A6", "#5F70B3", "#A26A5F", "#668144", "#91517D", "#AB3A46", "#4F6E8F", "#7D7A86", "#D9A05B"];
 const sundayColor = "#E0525A";
-const dailyQuotes = [
-  { text: "The tree which fills the arms grew from the tiniest sprout; the tower of nine storeys rose from a small heap of earth.", source: "Laozi · Dao De Jing, ch. 64" },
-  { text: "The journey of a thousand li commenced with a single step. If you are careful at the end as at the beginning, you will not ruin your work.", source: "Laozi · Dao De Jing, ch. 64" },
-  { text: "To win a hundred victories in a hundred battles is not the highest excellence; to subdue the enemy without fighting is.", source: "Sunzi · The Art of War, ch. 3" },
-  { text: "Hence to fight and conquer in all your battles is not supreme excellence; supreme excellence consists in breaking resistance without fighting.", source: "Sunzi · The Art of War, ch. 3" },
-  { text: "The things in our control are by nature free, unrestrained, unhindered; those not in our control are weak and restrained.", source: "Epictetus · Enchiridion, 1" },
-  { text: "We are adapted by nature to receive virtue, and are made perfect by habit.", source: "Aristotle · Nicomachean Ethics, II" },
-  { text: "The most important part of education is right training in the nursery; practice makes the work take root.", source: "Plato · Laws, VII" }
-];
 const dayStart = 7 * 60;
 const dayEnd = 19 * 60;
 const daySpan = dayEnd - dayStart;
@@ -58,11 +50,11 @@ const dayPosition = (value: string) => ((toMinutes(value) - dayStart) / daySpan)
 const timeLabel = (hour: number) => `${String(hour).padStart(2, "0")}:00`;
 
 function HourAxis({ short = false }: { short?: boolean }) {
-  return <div className={`relative ${short ? "h-[360px]" : "h-[672px]"}`} aria-hidden="true">{Array.from({ length: 13 }, (_, i) => <span key={i} className="absolute right-3 -translate-y-1/2 font-display text-[10px] font-medium tabular-nums text-ink/45" style={{ top: `${(i / 12) * 100}%` }}>{i === 0 || i % 2 === 0 ? "–" : timeLabel(7 + i)}</span>)}</div>;
+  return <div className={`relative ${short ? "weekly-grid-height" : "day-grid-height"}`} aria-hidden="true">{Array.from({ length: 13 }, (_, i) => <span key={i} className="absolute right-3 -translate-y-1/2 font-display text-[10px] font-medium tabular-nums text-ink/45" style={{ top: `${(i / 12) * 100}%` }}>{i === 0 || i % 2 === 0 ? "–" : timeLabel(7 + i)}</span>)}</div>;
 }
 
 function DensityBand({ entries, short = false, color }: { entries: BlockWithMember[]; short?: boolean; color: string }) {
-  return <div className={`relative border-l ${short ? "h-[360px]" : "h-[672px]"}`} style={{ borderLeftColor: wash(color, .55) }} aria-label="room occupancy density">{Array.from({ length: 48 }, (_, i) => { const start = dayStart + i * 15; const count = entries.filter(({ block }) => toMinutes(block.startTime) <= start && toMinutes(block.endTime) > start).length; return <span key={i} className="absolute left-0 w-full" style={{ top: `${(i / 48) * 100}%`, height: `${Math.max(0, 100 / 48 - .5)}%`, transform: `scaleX(${count ? Math.min(1, .18 + count / 8) : 0})`, transformOrigin: "left", backgroundColor: wash(color, .55) }} />; })}</div>;
+  return <div className={`relative border-l ${short ? "weekly-grid-height" : "day-grid-height"}`} style={{ borderLeftColor: wash(color, .55) }} aria-label="room occupancy density">{Array.from({ length: 48 }, (_, i) => { const start = dayStart + i * 15; const count = entries.filter(({ block }) => toMinutes(block.startTime) <= start && toMinutes(block.endTime) > start).length; return <span key={i} className="absolute left-0 w-full" style={{ top: `${(i / 48) * 100}%`, height: `${Math.max(0, 100 / 48 - .5)}%`, transform: `scaleX(${count ? Math.min(1, .18 + count / 8) : 0})`, transformOrigin: "left", backgroundColor: wash(color, .55) }} />; })}</div>;
 }
 
 function DayExtras({ selectedDate, selectedDay, blocks }: { selectedDate: Date; selectedDay: number; blocks: BlockWithMember[] }) {
@@ -70,9 +62,9 @@ function DayExtras({ selectedDate, selectedDay, blocks }: { selectedDate: Date; 
   const month = selectedDate.getMonth();
   const daysInMonth = new Date(year, month + 1, 0).getDate();
   const firstWeekday = (new Date(year, month, 1).getDay() + 6) % 7;
-  const quote = dailyQuotes[(selectedDate.getDate() + month) % dailyQuotes.length];
+  const quote = quoteForDate(selectedDate);
   return <div className="grid gap-6 px-5 py-8 sm:px-10 lg:grid-cols-[minmax(0,1fr)_250px] lg:gap-12">
-    <article className="bg-[#FFFDF9] px-5 py-6 sm:px-7"><p className="font-display text-[10px] font-bold tracking-[.2em] text-ink/45">QUOTE OF THE DAY</p><p className="mt-7 max-w-xl font-display text-lg font-medium leading-[1.35] tracking-[-.02em] text-ink/80 sm:text-2xl">“{quote.text}”</p><p className="mt-7 font-display text-[10px] font-bold tracking-[.12em] text-ink/40">{quote.source.toUpperCase()}</p></article>
+    <article className="bg-[#FFFDF9] px-5 py-6 sm:px-7"><p className="max-w-xl font-display text-lg font-medium leading-[1.35] tracking-[-.02em] text-ink/80 sm:text-2xl">“{quote.text}”</p><p className="mt-7 font-display text-[10px] font-bold tracking-[.12em] text-ink/40">{quote.source.toUpperCase()}</p></article>
     <aside className="border-l border-ink/15 pl-5 sm:pl-7"><div className="flex items-baseline justify-between"><p className="font-display text-[10px] font-bold tracking-[.18em] text-ink/50">{selectedDate.toLocaleString("en-US", { month: "short" }).toUpperCase()} {year}</p><span className="font-display text-[10px] text-ink/40">MONTH</span></div><div className="mt-4 grid grid-cols-7 gap-y-2 text-center font-display text-[10px] text-ink/55">{["M", "T", "W", "T", "F", "S", "S"].map((day, index) => <span key={`${day}-${index}`} className="font-bold">{day}</span>)}{Array.from({ length: firstWeekday }, (_, index) => <span key={`blank-${index}`} />)}{Array.from({ length: daysInMonth }, (_, index) => { const day = index + 1; const weekday = (firstWeekday + index) % 7; const isSelected = day === selectedDate.getDate(); return <span key={day} className={`relative mx-auto flex h-6 w-6 items-center justify-center ${isSelected ? "rounded-full bg-slate font-bold text-paper-deep" : ""}`} style={weekday > 4 && !isSelected ? { color: sundayColor } : undefined}>{day}</span>; })}</div></aside>
   </div>;
 }
@@ -99,7 +91,7 @@ function DayTimeline({ entries, mobile = false, short = false, accent, currentTi
   const maxLane = Math.max(lanes.length, 1);
   const hourHeight = short ? 30 : mobile ? 34 : 56;
   const plannerGrid = `repeating-linear-gradient(to bottom, ${wash(accent, .36)} 0 1px, transparent 1px ${hourHeight * 2}px),repeating-linear-gradient(to bottom, ${wash(accent, .22)} 0 1px, transparent 1px ${hourHeight}px),repeating-linear-gradient(to bottom, ${wash(accent, .13)} 0 1px, transparent 1px ${hourHeight / 4}px),repeating-linear-gradient(to right, ${wash(accent, .13)} 0 1px, transparent 1px 26px)`;
-  return <div className={short ? "relative h-[360px]" : mobile ? "relative h-[408px]" : "relative h-[672px]"} style={{ backgroundImage: plannerGrid }}>
+  return <div className={short ? "weekly-day-grid relative w-full" : "day-timeline relative w-full"} style={{ backgroundImage: plannerGrid }}>
     {currentTime && toMinutes(currentTime) >= dayStart && toMinutes(currentTime) <= dayEnd ? <span className="pointer-events-none absolute inset-x-0 z-[2] h-px" style={{ top: `${dayPosition(currentTime)}%`, backgroundColor: accent }} aria-hidden="true" /> : null}
     {entries.map((entry) => <BlockBar key={entry.block.id} entry={entry} lane={laneFor.get(entry.block.id) || 0} laneCount={maxLane} compact={mobile} highlighted={highlightedPeople.has(entry.member.id)} onToggle={onToggle} />)}
   </div>;
@@ -159,7 +151,6 @@ export function PublicBoard({ today, now, people, blocks, openSessions }: { toda
     });
   };
   const togglePerson = (personId: number) => setHighlightedPeople((current) => { const next = new Set(current); if (next.has(personId)) next.delete(personId); else next.add(personId); return next; });
-  const totalHours = blocks.reduce((sum, { block }) => sum + (toMinutes(block.endTime) - toMinutes(block.startTime)) / 60, 0);
   const selectedMonth = selectedDate.getMonth() + 1;
   const selectedDayNumber = selectedDate.getDate();
   const selectedKanji = ["月", "火", "水", "木", "金", "土", "日"][selectedDay];
@@ -190,7 +181,7 @@ export function PublicBoard({ today, now, people, blocks, openSessions }: { toda
         <div className="space-y-2 lg:hidden">{WEEKDAYS.slice(0, 5).map((day, index) => <div key={day} className="flex w-full items-stretch gap-2" style={highlightedDays.has(index) ? { backgroundColor: wash(monthAccent, .08) } : undefined}><WeekDateBox day={day} date={new Date(dateForDay(index))} selected={highlightedDays.has(index)} accent={monthAccent} onClick={() => toggleWeekday(index)} /><button onClick={() => setSelectedDateValue(dateValueForDay(index))} className="relative min-w-0 flex-1 px-1 text-left"><span className="relative block h-full min-h-12"><span className="absolute inset-y-0 left-0 right-0 flex items-end gap-px">{Array.from({ length: 48 }, (_, slot) => { const start = 7 * 60 + slot * 15; const count = byDay[index].filter(({ block }) => toMinutes(block.startTime) <= start && toMinutes(block.endTime) > start).length; return <i key={slot} className="flex-1 bg-slate" style={{ height: `${count ? Math.max(15, count * 24) : 0}%`, opacity: count ? .78 : 0 }} />; })}</span></span></button></div>)}</div>
         <PeoplePalette people={people} highlightedPeople={highlightedPeople} onToggle={togglePerson} />
       </section>
-      <footer className="flex flex-wrap items-center justify-between gap-3 bg-paper-deep px-5 py-4 font-display text-[10px] font-medium tracking-[.14em] text-ink/50 sm:px-10"><span>RABO.YANGRAN.ORG · © Yang Ran 2026</span><span className="flex flex-wrap items-center justify-end gap-4"><span>07:00–19:00 · AMERICA/NEW_YORK · {totalHours.toFixed(1)} H SCHEDULED</span><Link href="/admin" className="font-medium tracking-[.08em] text-ink/35 transition hover:text-coral">管理者ログイン</Link></span></footer>
+      <footer className="flex flex-wrap items-center justify-between gap-3 bg-paper-deep px-5 py-4 font-display text-[10px] font-medium tracking-[.14em] text-ink/50 sm:px-10"><span>RABO.YANGRAN.ORG · © Yang Ran 2026</span><span className="flex flex-wrap items-center justify-end gap-4"><span>07:00–19:00 · AMERICA/NEW_YORK</span><Link href="/admin" className="font-medium tracking-[.08em] text-ink/35 transition hover:text-coral">管理者ログイン</Link></span></footer>
     </section>
   </div>;
 }
