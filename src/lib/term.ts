@@ -37,11 +37,13 @@ export const isTermDate = (date: string) =>
 
 export const isTermOver = (date: string) => date > TERM_END;
 
-// Short phrase for why a day is closed, for error copy and UI hints.
+// Short phrase for why a day is closed by default, for error copy and UI hints.
+// The term boundaries are just another "no lab by default" window — an admin can
+// still add hours to a specific out-of-term day on purpose.
 export const outOfTermReason = (date: string) => {
-  if (date < TERM_START) return `before the term starts on ${TERM_START}`;
-  if (date > TERM_END) return `after the term ends on ${TERM_END}`;
-  return `during the winter break (${BREAK_START} – ${BREAK_END})`;
+  if (date < TERM_START) return `before the term starts, ${TERM_START}`;
+  if (date > TERM_END) return `after the term ends, ${TERM_END}`;
+  return `winter break, ${BREAK_START} to ${BREAK_END}`;
 };
 
 export const labStatusFor = (date: string): { status: LabStatus; reason: string } => {
