@@ -4,10 +4,10 @@ import { PublicBoard } from "@/components/public-board";
 export const dynamic = "force-dynamic";
 
 export default async function AdminPage() {
-  const { today, now, people, blocks, openSessions } = await getHomeData();
+  const { today, now, people, blocks, openSessions, attendance } = await getHomeData();
   return (
     <div className="py-8">
-      <PublicBoard today={today} now={now} people={people} blocks={blocks} openSessions={openSessions} admin />
+      <PublicBoard today={today} now={now} people={people} blocks={blocks} openSessions={openSessions} attendance={attendance} admin />
     </div>
   );
 }

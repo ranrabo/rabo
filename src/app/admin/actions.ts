@@ -4,7 +4,7 @@ import { and, desc, eq, isNull, sql } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { auth } from "@/auth";
 import { db } from "@/db";
-import { labSession, person, weeklyBlock } from "@/db/schema";
+import { blockAttendance, labSession, person, weeklyBlock } from "@/db/schema";
 import { getLabToday } from "@/lib/utils";
 
 const requireAdmin = async () => {
@@ -131,6 +131,31 @@ export const updatePerson = async (formData: FormData) => {
 export const deactivatePerson = async (formData: FormData) => {
   await requireAdmin();
   await db.update(person).set({ active: false }).where(eq(person.id, Number(text(formData, "id"))));
+  refresh();
+};
+
+const attendanceKey = (formData: FormData) => {
+  const blockId = Number(text(formData, "blockId"));
+  const date = text(formData, "date");
+  if (!Number.isInteger(blockId) || blockId < 1) throw new Error("Choose a valid schedule block.");
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) throw new Error("Choose a valid date.");
+  return { blockId, date };
+};
+
+export const confirmAttendance = async (formData: FormData) => {
+  const session = await requireAdmin();
+  const { blockId, date } = attendanceKey(formData);
+  await db
+    .insert(blockAttendance)
+    .values({ weeklyBlockId: blockId, attendDate: date, loggedBy: session.user?.name || "Admin" })
+    .onConflictDoNothing();
+  refresh();
+};
+
+export const clearAttendance = async (formData: FormData) => {
+  await requireAdmin();
+  const { blockId, date } = attendanceKey(formData);
+  await db.delete(blockAttendance).where(and(eq(blockAttendance.weeklyBlockId, blockId), eq(blockAttendance.attendDate, date)));
   refresh();
 };
 

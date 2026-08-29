@@ -10,6 +10,7 @@ import {
   text,
   time,
   timestamp,
+  uniqueIndex,
 } from "drizzle-orm/pg-core";
 
 export const person = pgTable(
@@ -87,6 +88,22 @@ export const progressEntry = pgTable(
   (table) => [index("progress_entry_person_date_idx").on(table.personId, table.progressDate)],
 );
 
+// One row per (recurring block, calendar date) that an admin has confirmed the
+// person attended in full. Absence of a row = not confirmed.
+export const blockAttendance = pgTable(
+  "block_attendance",
+  {
+    id: serial("id").primaryKey(),
+    weeklyBlockId: integer("weekly_block_id")
+      .notNull()
+      .references(() => weeklyBlock.id, { onDelete: "cascade" }),
+    attendDate: date("attend_date").notNull(),
+    loggedBy: text("logged_by"),
+    createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
+  },
+  (table) => [uniqueIndex("block_attendance_block_date_idx").on(table.weeklyBlockId, table.attendDate)],
+);
+
 export const appUser = pgTable("app_user", {
   id: serial("id").primaryKey(),
   email: text("email").notNull().unique(),
@@ -100,8 +117,13 @@ export const personRelations = relations(person, ({ many }) => ({
   progressEntries: many(progressEntry),
 }));
 
-export const weeklyBlockRelations = relations(weeklyBlock, ({ one }) => ({
+export const weeklyBlockRelations = relations(weeklyBlock, ({ one, many }) => ({
   person: one(person, { fields: [weeklyBlock.personId], references: [person.id] }),
+  attendance: many(blockAttendance),
+}));
+
+export const blockAttendanceRelations = relations(blockAttendance, ({ one }) => ({
+  block: one(weeklyBlock, { fields: [blockAttendance.weeklyBlockId], references: [weeklyBlock.id] }),
 }));
 
 export const labSessionRelations = relations(labSession, ({ one }) => ({
@@ -117,3 +139,4 @@ export type PublicPerson = Pick<Person, "id" | "fullName" | "researchArea" | "ac
 export type WeeklyBlock = typeof weeklyBlock.$inferSelect;
 export type LabSession = typeof labSession.$inferSelect;
 export type ProgressEntry = typeof progressEntry.$inferSelect;
+export type BlockAttendance = typeof blockAttendance.$inferSelect;

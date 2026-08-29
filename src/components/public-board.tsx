@@ -3,11 +3,11 @@
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Check, ChevronLeft, ChevronRight, GripVertical, Trash2, X } from "lucide-react";
+import { Check, ChevronLeft, ChevronRight, GripVertical, Pencil, Trash2, X } from "lucide-react";
 import type { PublicPerson, WeeklyBlock } from "@/db/schema";
 import { addDays, firstName, formatHours, formatTime, getMonday, toMinutes, WEEKDAYS } from "@/lib/utils";
 import { quoteForDate } from "@/lib/quotes";
-import { createWeeklyBlock, deleteWeeklyBlock, reorderPeople, updateWeeklyBlock } from "@/app/admin/actions";
+import { clearAttendance, confirmAttendance, createWeeklyBlock, deleteWeeklyBlock, reorderPeople, updateWeeklyBlock } from "@/app/admin/actions";
 
 type BlockWithMember = { block: WeeklyBlock; member: PublicPerson };
 type SessionWithMember = { session: { personId: number; startTime: string; endTime: string | null }; member: PublicPerson };
@@ -19,6 +19,8 @@ type BarEditApi = {
   crossDay: boolean;
   isDirty: (id: number) => boolean;
   isSaving: (id: number) => boolean;
+  isConfirmed: (id: number) => boolean;
+  isAttendOpen: (id: number) => boolean;
   onDraw: (weekday: number, start: number, end: number, anchor: DOMRect) => void;
   onBarPointerDown: (event: React.PointerEvent, id: number) => void;
   onEdgePointerDown: (event: React.PointerEvent, id: number, edge: "top" | "bottom") => void;
@@ -26,6 +28,9 @@ type BarEditApi = {
   onDragEnd: (event: React.PointerEvent) => void;
   onCommit: (id: number) => void;
   onRevert: (id: number) => void;
+  onToggleConfirm: (id: number) => void;
+  onDismissAttend: () => void;
+  onOpenEditor: (id: number, anchor: DOMRect) => void;
 };
 
 const hues = ["#EE7E61", "#A47351", "#D590B6", "#F28D9D", "#B5A131", "#459379", "#2095A6", "#5F70B3", "#A26A5F", "#668144", "#91517D", "#AB3A46", "#4F6E8F", "#7D7A86", "#D9A05B"];
@@ -117,26 +122,34 @@ function BlockBar({ entry, lane, laneCount, compact = false, vertical = false, h
   if (edit) {
     const dirty = edit.isDirty(block.id);
     const saving = edit.isSaving(block.id);
-    return <div className={`absolute ${dirty ? "z-20" : "z-[1]"}`} style={{ top, height, left, width }}>
+    const confirmed = !dirty && block.id > 0 && edit.isConfirmed(block.id);
+    const attendOpen = !dirty && block.id > 0 && edit.isAttendOpen(block.id);
+    const showAttend = confirmed || attendOpen;
+    const clusterPos = vertical ? "right-0.5 top-0.5" : "left-full top-0 ml-1";
+    return <div className={`group absolute ${dirty || showAttend ? "z-20" : "z-[1]"}`} style={{ top, height, left, width }}>
       <div
         role="button"
         tabIndex={0}
-        aria-label={`${label}. Drag to move, drag an edge to resize, click to assign or remove.`}
-        title={`${label} — drag to move, edges to resize, click to assign or remove`}
+        aria-label={`${label}. Drag to move, drag an edge to resize, click to confirm attendance.`}
+        title={`${label} — drag to move, edges to resize, click to confirm attendance`}
         onPointerDown={(event) => edit.onBarPointerDown(event, block.id)}
         onPointerMove={edit.onDragMove}
         onPointerUp={edit.onDragEnd}
         className="absolute inset-0 touch-none cursor-grab select-none overflow-hidden rounded-[2px] border-l-[3px] px-2 py-1.5 text-left shadow-sm transition active:cursor-grabbing"
-        style={{ backgroundColor: wash(color, dirty ? .3 : .16), borderLeftColor: barColor, boxShadow: dirty ? `0 0 0 1px ${barColor}` : undefined }}
+        style={{ backgroundColor: wash(color, dirty ? .3 : confirmed ? .36 : .16), borderLeftColor: barColor, boxShadow: dirty ? `0 0 0 1px ${barColor}` : confirmed ? `inset 0 0 0 1px ${wash(barColor, .5)}` : undefined }}
       >
         <span onPointerDown={(event) => edit.onEdgePointerDown(event, block.id, "top")} onPointerMove={edit.onDragMove} onPointerUp={edit.onDragEnd} className="absolute inset-x-0 top-0 z-[3] h-2 cursor-ns-resize touch-none" aria-hidden="true" />
         <span className={`pointer-events-none block truncate font-display text-[11px] font-bold leading-tight ${vertical ? "writing-mode-vertical [writing-mode:vertical-rl]" : ""}`}>{firstName(member.fullName)}</span>
         {vertical ? null : <span className="pointer-events-none mt-1 block truncate text-[10px] font-medium text-ink/60">{formatTime(block.startTime)}–{formatTime(block.endTime)}</span>}
         <span onPointerDown={(event) => edit.onEdgePointerDown(event, block.id, "bottom")} onPointerMove={edit.onDragMove} onPointerUp={edit.onDragEnd} className="absolute inset-x-0 bottom-0 z-[3] h-2 cursor-ns-resize touch-none" aria-hidden="true" />
       </div>
-      {dirty ? <div className={`absolute z-30 flex gap-1 ${vertical ? "right-0.5 top-0.5" : "left-full top-0 ml-1"}`}>
+      {!dirty && block.id > 0 ? <button type="button" onPointerDown={(event) => event.stopPropagation()} onClick={(event) => { event.stopPropagation(); edit.onOpenEditor(block.id, (event.currentTarget.parentElement as HTMLElement).getBoundingClientRect()); }} aria-label="Edit block (person or remove)" title="Edit block — person, remove" className={`absolute z-30 flex h-4 w-4 items-center justify-center rounded-full bg-paper-deep text-ink/40 opacity-0 shadow-sm transition hover:text-ink focus-visible:opacity-100 group-hover:opacity-100 ${vertical ? "left-0.5 top-0.5" : "right-0.5 top-0.5"}`}><Pencil size={9} strokeWidth={2.5} /></button> : null}
+      {dirty ? <div className={`absolute z-30 flex gap-1 ${clusterPos}`}>
         <button type="button" disabled={saving} onPointerDown={(event) => event.stopPropagation()} onClick={() => edit.onCommit(block.id)} aria-label="Save this change" title="Save this change" className="flex h-[18px] w-[18px] items-center justify-center rounded-full border border-slate/40 bg-paper-deep text-slate shadow-sm transition hover:bg-slate hover:text-paper-deep disabled:opacity-50"><Check size={11} strokeWidth={3} /></button>
         <button type="button" disabled={saving} onPointerDown={(event) => event.stopPropagation()} onClick={() => edit.onRevert(block.id)} aria-label="Discard this change" title="Discard this change" className="flex h-[18px] w-[18px] items-center justify-center rounded-full border border-ink/25 bg-paper-deep text-ink/50 shadow-sm transition hover:bg-ink/10 hover:text-ink disabled:opacity-50"><X size={11} strokeWidth={3} /></button>
+      </div> : showAttend ? <div className={`absolute z-30 flex gap-1 ${clusterPos}`}>
+        <button type="button" disabled={saving} onPointerDown={(event) => event.stopPropagation()} onClick={() => edit.onToggleConfirm(block.id)} aria-pressed={confirmed} aria-label={confirmed ? "Attendance confirmed — click to undo" : "Confirm full attendance"} title={confirmed ? "Attendance confirmed — click to undo" : "Confirm full attendance"} className={`flex h-[18px] w-[18px] items-center justify-center rounded-full border shadow-sm transition disabled:opacity-50 ${confirmed ? "border-slate bg-slate text-paper-deep hover:bg-ink hover:border-ink" : "border-slate/40 bg-paper-deep text-slate hover:bg-slate hover:text-paper-deep"}`}><Check size={11} strokeWidth={3} /></button>
+        {attendOpen ? <button type="button" onPointerDown={(event) => event.stopPropagation()} onClick={() => edit.onDismissAttend()} aria-label="Dismiss" title="Dismiss" className="flex h-[18px] w-[18px] items-center justify-center rounded-full border border-ink/25 bg-paper-deep text-ink/50 shadow-sm transition hover:bg-ink/10 hover:text-ink"><X size={11} strokeWidth={3} /></button> : null}
       </div> : null}
     </div>;
   }
@@ -156,8 +169,13 @@ function DayTimeline({ entries, mobile = false, short = false, accent, currentTi
     laneFor.set(entry.block.id, lane);
   });
   const maxLane = Math.max(lanes.length, 1);
-  const hourHeight = short ? 30 : mobile ? 34 : 56;
-  const plannerGrid = `repeating-linear-gradient(to bottom, ${wash(accent, .36)} 0 1px, transparent 1px ${hourHeight * 2}px),repeating-linear-gradient(to bottom, ${wash(accent, .22)} 0 1px, transparent 1px ${hourHeight}px),repeating-linear-gradient(to bottom, ${wash(accent, .13)} 0 1px, transparent 1px ${hourHeight / 4}px),repeating-linear-gradient(to right, ${wash(accent, .13)} 0 1px, transparent 1px 26px)`;
+  // Horizontal rules are sized as fractions of the timeline height (12 hours,
+  // 07:00–19:00) so they line up with the HourAxis labels and the block bars,
+  // which are all positioned by percentage. Pixel-based spacing drifts because
+  // the container height is a responsive clamp().
+  const columnRule = short ? 20 : mobile ? 22 : 26;
+  const plannerGrid = `linear-gradient(to bottom, ${wash(accent, .36)} 0 1px, transparent 1px),linear-gradient(to bottom, ${wash(accent, .22)} 0 1px, transparent 1px),linear-gradient(to bottom, ${wash(accent, .13)} 0 1px, transparent 1px),repeating-linear-gradient(to right, ${wash(accent, .13)} 0 1px, transparent 1px ${columnRule}px)`;
+  const plannerSize = `100% calc(100% / 6),100% calc(100% / 12),100% calc(100% / 48),100% 100%`;
   const canDraw = Boolean(edit && weekday);
   const minuteAt = (clientY: number, element: HTMLElement) => {
     const rect = element.getBoundingClientRect();
@@ -165,7 +183,7 @@ function DayTimeline({ entries, mobile = false, short = false, accent, currentTi
   };
   const drawLow = draw ? Math.min(draw.start, draw.end) : 0;
   const drawSpan = draw ? Math.abs(draw.end - draw.start) : 0;
-  return <div data-timeline data-weekday={weekday} className={short ? "weekly-day-grid relative w-full" : "day-timeline relative w-full"} style={{ backgroundImage: plannerGrid }}>
+  return <div data-timeline data-weekday={weekday} className={short ? "weekly-day-grid relative w-full" : "day-timeline relative w-full"} style={{ backgroundImage: plannerGrid, backgroundSize: plannerSize, backgroundRepeat: "repeat" }}>
     {canDraw ? <div
       className="absolute inset-0 z-0 cursor-crosshair touch-none"
       onPointerDown={(event) => { if (event.button !== 0) return; const start = minuteAt(event.clientY, event.currentTarget); event.currentTarget.setPointerCapture(event.pointerId); setDraw({ start, end: start }); }}
@@ -207,7 +225,7 @@ function TodayList({ entries, openSessions, highlightedPeople, onToggle }: { ent
   </div>;
 }
 
-function PeoplePalette({ people, blocks, highlightedPeople, onToggle, admin = false, onReorder }: { people: PublicPerson[]; blocks: BlockWithMember[]; highlightedPeople: Set<number>; onToggle: (personId: number) => void; admin?: boolean; onReorder?: (ids: number[]) => void }) {
+function PeoplePalette({ people, blocks, highlightedPeople, onToggle, admin = false, onReorder, confirmedHours }: { people: PublicPerson[]; blocks: BlockWithMember[]; highlightedPeople: Set<number>; onToggle: (personId: number) => void; admin?: boolean; onReorder?: (ids: number[]) => void; confirmedHours?: Map<number, number> }) {
   const byId = useMemo(() => new Map(people.map((member) => [member.id, member])), [people]);
   const serverOrder = useMemo(() => people.map((member) => member.id), [people]);
   const [order, setOrder] = useState<number[]>(serverOrder);
@@ -219,6 +237,14 @@ function PeoplePalette({ people, blocks, highlightedPeople, onToggle, admin = fa
     for (const { block, member } of blocks) totals.set(member.id, (totals.get(member.id) ?? 0) + (toMinutes(block.endTime) - toMinutes(block.startTime)) / 60);
     return totals;
   }, [blocks]);
+
+  if (!admin) {
+    const alphabetized = [...people].sort((a, b) => a.fullName.localeCompare(b.fullName));
+    return <section className="px-5 pb-10 pt-2 sm:px-10"><div className="flex flex-wrap gap-x-7 gap-y-3">{alphabetized.map((member) => {
+      const on = highlightedPeople.has(member.id);
+      return <button key={member.id} type="button" onClick={() => onToggle(member.id)} aria-pressed={on} aria-label={`Highlight ${firstName(member.fullName)}`} className="flex items-center gap-2.5 text-left transition hover:opacity-80"><span className="h-3.5 w-3.5 shrink-0 rounded-[2px] transition" style={{ backgroundColor: on ? brighten(member.color) : member.color, boxShadow: on ? `0 0 0 1px ${brighten(member.color)}` : undefined }} /><span className="font-display text-sm font-bold">{firstName(member.fullName)}</span></button>;
+    })}</div></section>;
+  }
 
   const ordered = order.map((id) => byId.get(id)).filter((member): member is PublicPerson => Boolean(member));
   for (const member of people) if (!order.includes(member.id)) ordered.push(member);
@@ -236,16 +262,16 @@ function PeoplePalette({ people, blocks, highlightedPeople, onToggle, admin = fa
   const sortAlpha = () => persist([...people].sort((a, b) => a.fullName.localeCompare(b.fullName)).map((member) => member.id));
 
   return <section className="px-5 pb-10 pt-2 sm:px-10">
-    <div className="flex items-center justify-between">
-      <p className="font-display text-[10px] font-bold tracking-[.18em] text-ink/45">PEOPLE · HOURS THIS WEEK</p>
-      {admin ? <button type="button" onClick={sortAlpha} className="font-display text-[10px] font-bold tracking-[.14em] text-ink/40 transition hover:text-ink" title="Sort people A–Z">A–Z</button> : null}
+    <div className="flex justify-end">
+      <button type="button" onClick={sortAlpha} className="font-display text-[10px] font-bold tracking-[.14em] text-ink/40 transition hover:text-ink" title="Sort people A–Z">A–Z</button>
     </div>
-    <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-3">
+    <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-3">
       {ordered.map((member) => {
         const on = highlightedPeople.has(member.id);
         const scheduled = weeklyHours.get(member.id) ?? 0;
+        const confirmed = confirmedHours?.get(member.id) ?? 0;
         const required = member.weeklyRequiredHours;
-        const delta = Math.round((scheduled - required) * 100) / 100;
+        const delta = Math.round((confirmed - required) * 100) / 100;
         const deltaLabel = required === 0 ? "no target" : delta === 0 ? "on target" : `${delta > 0 ? "+" : "−"}${formatHours(Math.abs(delta))}`;
         const deltaClass = required === 0 ? "text-ink/40" : delta < 0 ? "text-coral" : "text-slate";
         return <div
@@ -259,15 +285,15 @@ function PeoplePalette({ people, blocks, highlightedPeople, onToggle, admin = fa
           role="button"
           tabIndex={0}
           aria-pressed={on}
-          aria-label={`Highlight ${firstName(member.fullName)} — ${formatHours(scheduled)} of ${formatHours(required)} this week`}
+          aria-label={`Highlight ${firstName(member.fullName)} — ${formatHours(confirmed)} confirmed of ${formatHours(required)} required this week`}
           className={`flex items-start gap-2.5 border px-3 py-2.5 text-left transition ${on ? "border-ink/25 bg-ink/[.04]" : "border-ink/12 bg-[#FFFDF9] hover:border-ink/25"} ${admin ? "cursor-grab active:cursor-grabbing" : "cursor-pointer"} ${dragId === member.id ? "opacity-40" : ""}`}
         >
           {admin ? <GripVertical size={13} className="mt-0.5 shrink-0 text-ink/25" aria-hidden="true" /> : null}
           <span className="mt-0.5 h-3.5 w-3.5 shrink-0 rounded-[2px] transition" style={{ backgroundColor: on ? brighten(member.color) : member.color, boxShadow: on ? `0 0 0 1px ${brighten(member.color)}` : undefined }} />
           <span className="min-w-0 flex-1">
             <span className="block truncate font-display text-sm font-bold">{firstName(member.fullName)}</span>
-            <span className="mt-0.5 block font-display text-[11px] tabular-nums text-ink/55">{formatHours(scheduled)} / {formatHours(required)}</span>
-            <span className={`font-display text-[11px] font-bold tabular-nums ${deltaClass}`}>{deltaLabel}</span>
+            <span className="mt-0.5 block font-display text-[11px] tabular-nums text-ink/55"><span className="font-bold text-ink/75">{formatHours(confirmed)}</span> conf · {formatHours(scheduled)} sched</span>
+            <span className={`font-display text-[11px] font-bold tabular-nums ${deltaClass}`}>{deltaLabel} · {formatHours(required)} req</span>
           </span>
         </div>;
       })}
@@ -297,7 +323,7 @@ function AdminPopover({ rect, entry, people, isNew, busy, onAssign, onRemove, on
   </>;
 }
 
-export function PublicBoard({ today, now, people, blocks, openSessions, admin = false }: { today: string; now: string; people: PublicPerson[]; blocks: BlockWithMember[]; openSessions: SessionWithMember[]; admin?: boolean }) {
+export function PublicBoard({ today, now, people, blocks, openSessions, attendance = [], admin = false }: { today: string; now: string; people: PublicPerson[]; blocks: BlockWithMember[]; openSessions: SessionWithMember[]; attendance?: { weeklyBlockId: number; attendDate: string }[]; admin?: boolean }) {
   const router = useRouter();
   const [, startSaving] = useTransition();
   const [selectedDateValue, setSelectedDateValue] = useState(today);
@@ -309,8 +335,22 @@ export function PublicBoard({ today, now, people, blocks, openSessions, admin = 
   const [savingIds, setSavingIds] = useState<Set<number>>(new Set());
   const [notice, setNotice] = useState<string | null>(null);
   const [popover, setPopover] = useState<{ id: number; rect: DOMRect } | null>(null);
+  const [attendFor, setAttendFor] = useState<number | null>(null);
+  const [confirmOverride, setConfirmOverride] = useState<Record<string, boolean>>({});
   const dragRef = useRef<DragState | null>(null);
   const tempIdRef = useRef(-1);
+
+  // Attendance is confirmed per (block, calendar date) for the current lab week.
+  const weekMonday = useMemo(() => getMonday(today), [today]);
+  const attendDateForWeekday = (weekday: number) => addDays(weekMonday, weekday - 1);
+  const confirmedSet = useMemo(() => new Set(attendance.map((row) => `${row.weeklyBlockId}:${row.attendDate}`)), [attendance]);
+  useEffect(() => {
+    setConfirmOverride((current) => {
+      const next: Record<string, boolean> = {};
+      for (const [key, value] of Object.entries(current)) if (confirmedSet.has(key) !== value) next[key] = value;
+      return next;
+    });
+  }, [confirmedSet]);
   useEffect(() => {
     const tick = () => setClock(new Intl.DateTimeFormat("en-GB", { timeZone: "America/New_York", hour: "2-digit", minute: "2-digit", hour12: false }).format(new Date()));
     const timer = window.setInterval(tick, 60_000);
@@ -352,6 +392,50 @@ export function PublicBoard({ today, now, people, blocks, openSessions, admin = 
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [admin, entries, edits, blocks, people]);
 
+  const attendKeyFor = (id: number): string | null => {
+    const saved = entries.find((entry) => entry.block.id === id);
+    return saved && id > 0 ? `${id}:${attendDateForWeekday(saved.block.weekday)}` : null;
+  };
+  const isConfirmed = (id: number): boolean => {
+    const key = attendKeyFor(id);
+    if (!key) return false;
+    return key in confirmOverride ? confirmOverride[key] : confirmedSet.has(key);
+  };
+  const toggleConfirm = (id: number) => {
+    const saved = entries.find((entry) => entry.block.id === id);
+    const key = attendKeyFor(id);
+    if (!saved || !key) return;
+    const date = attendDateForWeekday(saved.block.weekday);
+    const next = !isConfirmed(id);
+    setConfirmOverride((current) => ({ ...current, [key]: next }));
+    setAttendFor(id);
+    const form = new FormData();
+    form.set("blockId", String(id));
+    form.set("date", date);
+    startSaving(async () => {
+      try {
+        if (next) await confirmAttendance(form); else await clearAttendance(form);
+        setNotice(null);
+        router.refresh();
+      } catch (error) {
+        setConfirmOverride((current) => { const clone = { ...current }; delete clone[key]; return clone; });
+        setNotice(error instanceof Error ? error.message : "Could not update attendance.");
+      }
+    });
+  };
+  const confirmedHoursByPerson = useMemo(() => {
+    const totals = new Map<number, number>();
+    if (!admin) return totals;
+    for (const { block, member } of boardBlocks) {
+      if (block.id < 0) continue;
+      const key = `${block.id}:${attendDateForWeekday(block.weekday)}`;
+      const on = key in confirmOverride ? confirmOverride[key] : confirmedSet.has(key);
+      if (on) totals.set(member.id, (totals.get(member.id) ?? 0) + (toMinutes(block.endTime) - toMinutes(block.startTime)) / 60);
+    }
+    return totals;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [admin, boardBlocks, confirmedSet, confirmOverride, weekMonday]);
+
   const startDrag = (event: React.PointerEvent, id: number, mode: DragState["mode"], crossDay: boolean) => {
     if (event.button !== 0) return;
     const timeline = (event.currentTarget as HTMLElement).closest("[data-timeline]") as HTMLElement | null;
@@ -388,7 +472,11 @@ export function PublicBoard({ today, now, people, blocks, openSessions, admin = 
     dragRef.current = null;
     if (!drag) return;
     try { (event.currentTarget as HTMLElement).releasePointerCapture(event.pointerId); } catch { /* capture already gone */ }
-    if (!drag.moved && drag.mode === "move") setPopover({ id: drag.id, rect: (event.currentTarget as HTMLElement).getBoundingClientRect() });
+    if (drag.moved || drag.mode !== "move") return;
+    // A plain click on a bar with a pending edit reopens its editor popover;
+    // on a settled bar it toggles the attendance confirm controls.
+    if (drag.id < 0 || drag.id in edits) setPopover({ id: drag.id, rect: (event.currentTarget as HTMLElement).getBoundingClientRect() });
+    else setAttendFor((current) => current === drag.id ? null : drag.id);
   };
   const drawBlock = (weekday: number, start: number, end: number, anchor: DOMRect) => {
     const member = people[0];
@@ -482,6 +570,8 @@ export function PublicBoard({ today, now, people, blocks, openSessions, admin = 
     crossDay,
     isDirty: (id) => id < 0 || id in edits,
     isSaving: (id) => savingIds.has(id),
+    isConfirmed,
+    isAttendOpen: (id) => attendFor === id,
     onDraw: drawBlock,
     onBarPointerDown: (event, id) => startDrag(event, id, "move", crossDay),
     onEdgePointerDown: (event, id, edge) => startDrag(event, id, edge, crossDay),
@@ -489,6 +579,9 @@ export function PublicBoard({ today, now, people, blocks, openSessions, admin = 
     onDragEnd: dragEnd,
     onCommit: commitBlock,
     onRevert: revertBlock,
+    onToggleConfirm: toggleConfirm,
+    onDismissAttend: () => setAttendFor(null),
+    onOpenEditor: (id, anchor) => { setAttendFor(null); setPopover({ id, rect: anchor }); },
   });
   const dayEditApi = admin ? makeEditApi(false) : undefined;
   const weekEditApi = admin ? makeEditApi(true) : undefined;
@@ -540,7 +633,7 @@ export function PublicBoard({ today, now, people, blocks, openSessions, admin = 
         <div className="pointer-events-none absolute inset-x-0 top-[390px] z-10 hidden justify-between lg:flex"><button type="button" onClick={() => shiftSelectedDate(-7)} className="pointer-events-auto flex h-10 w-10 items-center justify-center text-ink/35 transition hover:text-ink" aria-label="Previous week"><ChevronLeft size={21} strokeWidth={1.5} /></button><button type="button" onClick={() => shiftSelectedDate(7)} className="pointer-events-auto flex h-10 w-10 items-center justify-center text-ink/35 transition hover:text-ink" aria-label="Next week"><ChevronRight size={21} strokeWidth={1.5} /></button></div>
         <div className="hidden overflow-hidden lg:block"><div className="grid grid-cols-[52px_repeat(5,minmax(0,1fr))] divide-x divide-ink/15"><div className="flex items-center px-2 py-3 font-display text-[10px] font-bold tracking-[.18em] text-ink/55">TIME</div>{WEEKDAYS.slice(0, 5).map((day, index) => <WeekDateBox key={day} day={day} date={new Date(dateForDay(index))} selected={highlightedDays.has(index)} accent={monthAccent} onClick={() => toggleWeekday(index)} />)}<div><HourAxis short /></div>{WEEKDAYS.slice(0, 5).map((day, index) => <div key={`timeline-${day}`} className="relative min-w-0 px-1.5" style={highlightedDays.has(index) ? { backgroundColor: wash(monthAccent, .08) } : undefined}><DayTimeline entries={byDay[index]} accent={monthAccent} currentTime={dateValueForDay(index) === today ? clock : undefined} highlightedPeople={highlightedPeople} onToggle={togglePerson} edit={weekEditApi} weekday={index + 1} short /></div>)}</div></div>
         <div className="space-y-2 lg:hidden">{WEEKDAYS.slice(0, 5).map((day, index) => <div key={day} className="flex w-full items-stretch gap-2" style={highlightedDays.has(index) ? { backgroundColor: wash(monthAccent, .08) } : undefined}><WeekDateBox day={day} date={new Date(dateForDay(index))} selected={highlightedDays.has(index)} accent={monthAccent} onClick={() => toggleWeekday(index)} /><button onClick={() => setSelectedDateValue(dateValueForDay(index))} className="relative min-w-0 flex-1 px-1 text-left"><span className="relative block h-full min-h-12"><span className="absolute inset-y-0 left-0 right-0 flex items-end gap-px">{Array.from({ length: 48 }, (_, slot) => { const start = 7 * 60 + slot * 15; const count = byDay[index].filter(({ block }) => toMinutes(block.startTime) <= start && toMinutes(block.endTime) > start).length; return <i key={slot} className="flex-1 bg-slate" style={{ height: `${count ? Math.max(15, count * 24) : 0}%`, opacity: count ? .78 : 0 }} />; })}</span></span></button></div>)}</div>
-        <PeoplePalette people={people} blocks={boardBlocks} highlightedPeople={highlightedPeople} onToggle={togglePerson} admin={admin} onReorder={reorderPalette} />
+        <PeoplePalette people={people} blocks={boardBlocks} highlightedPeople={highlightedPeople} onToggle={togglePerson} admin={admin} onReorder={reorderPalette} confirmedHours={confirmedHoursByPerson} />
       </section>
       <footer className="flex flex-wrap items-center justify-between gap-3 bg-paper-deep px-5 py-4 font-display text-[10px] font-medium tracking-[.14em] text-ink/50 sm:px-10"><span>RABO.YANGRAN.ORG · © Yang Ran 2026</span><span className="flex flex-wrap items-center justify-end gap-4"><span>07:00–19:00 · AMERICA/NEW_YORK</span><a href="https://rabo.yangran.org/login" className="font-medium tracking-[.08em] text-ink/35 transition hover:text-coral">管理者ログイン</a></span></footer>
     </section>
