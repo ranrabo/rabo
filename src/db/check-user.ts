@@ -2,7 +2,7 @@ import { config } from "dotenv";
 import bcrypt from "bcryptjs";
 import { appUser } from "./schema";
 
-config({ path: ".env.local" });
+config({ path: process.argv[2] || ".env.local" });
 
 const run = async () => {
   const { db } = await import("./index");
