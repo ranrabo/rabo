@@ -53,8 +53,9 @@ function DayTimeline({ entries, now, showNow = true, mobile = false, short = fal
     laneFor.set(entry.block.id, lane);
   });
   const maxLane = Math.max(lanes.length, 1);
-  return <div className={short ? "relative h-[360px]" : mobile ? "relative h-[408px]" : "relative h-[672px]"}>
-    {Array.from({ length: 13 }, (_, i) => <div key={i} className="pointer-events-none absolute inset-x-0 border-t border-ink/10" style={{ top: `${(i / 12) * 100}%` }} />)}
+  const hourHeight = short ? 30 : mobile ? 34 : 56;
+  const plannerGrid = `repeating-linear-gradient(to bottom, rgba(43,41,38,.20) 0 1px, transparent 1px ${hourHeight * 2}px),repeating-linear-gradient(to bottom, rgba(43,41,38,.09) 0 1px, transparent 1px ${hourHeight}px),repeating-linear-gradient(to bottom, rgba(43,41,38,.07) 0 1px, transparent 1px ${hourHeight / 4}px),repeating-linear-gradient(to right, rgba(43,41,38,.07) 0 1px, transparent 1px 26px)`;
+  return <div className={short ? "relative h-[360px]" : mobile ? "relative h-[408px]" : "relative h-[672px]"} style={{ backgroundImage: plannerGrid }}>
     {entries.map((entry) => <BlockBar key={entry.block.id} entry={entry} lane={laneFor.get(entry.block.id) || 0} laneCount={maxLane} compact={mobile} />)}
     {showNow && <div className="absolute inset-y-0 z-[2] w-0.5 bg-coral" style={{ left: `${dayPosition(now)}%` }}><span className="absolute -top-1 -left-1.5 h-3 w-3 rounded-full border-2 border-paper-deep bg-coral" /></div>}
   </div>;
