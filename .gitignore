@@ -12,3 +12,5 @@ drizzle/meta/
 .vercel
 .DS_Store
 .claude/settings.local.json
+private/*
+!private/roster.example.json

@@ -31,6 +31,37 @@ AUTH_SECRET=
 
 Never commit `.env.local`, `.env`, connection strings, authentication secrets, passwords, email addresses, or member contact details.
 
+## Private macOS Mail utility
+
+The standalone [scripts/mail_team.py](scripts/mail_team.py) utility manages a local roster and private draft files, then uses macOS Mail.app through AppleScript. It is intended to be run directly in VS Code on a Mac; a hosted web server cannot control the Mail.app installation on your computer.
+
+Private files belong under `private/`, which is ignored by Git. Start with an empty roster, then add real team contact information locally:
+
+```bash
+python3 scripts/mail_team.py init
+python3 scripts/mail_team.py add --name "Teammate Name" --email "teammate@example.com"
+python3 scripts/mail_team.py list
+```
+
+Compose and review a draft in Mail.app:
+
+```bash
+python3 scripts/mail_team.py compose \
+  --members "Teammate Name" \
+  --subject "Weekly update" \
+  --body-file private/weekly-update.txt
+```
+
+The command saves a private JSON copy under `private/drafts/` and opens a visible Mail.app draft. To send a saved draft directly through Mail.app, use the explicit confirmation flag:
+
+```bash
+python3 scripts/mail_team.py send \
+  --draft private/drafts/your-draft.json \
+  --confirm-send
+```
+
+macOS may ask to allow VS Code or Python to control Mail.app under System Settings → Privacy & Security → Automation. Draft mode is recommended for review; direct sending is intentionally opt-in.
+
 ## Database workflow
 
 The database schema is defined in [src/db/schema.ts](src/db/schema.ts). Generated SQL is stored in [drizzle/](drizzle/). `npm run db:push` synchronizes the configured database with the current TypeScript schema; it does not copy application data between databases.
