@@ -34,6 +34,7 @@ button, a, input, select, textarea { -webkit-tap-highlight-color: transparent; }
 .grid-paper { background-image: linear-gradient(to bottom, rgba(43,41,38,.1) 1px, transparent 1px); background-size: 100% 20%; }
 .hairline { border-color: rgba(43,41,38,.18); }
 .safe-bottom { padding-bottom: max(1.25rem, env(safe-area-inset-bottom)); }
+.moon-glow { text-shadow: 0 0 8px rgba(255, 244, 190, .95), 0 0 18px rgba(255, 220, 128, .55); }
 
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { scroll-behavior: auto !important; transition-duration: .01ms !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; }

@@ -9,17 +9,19 @@ npm install
 cp .env.example .env.local
 ```
 
-Set `DATABASE_URL` to the pooled Neon connection string and set a strong `AUTH_SECRET`. For the seeded local users, provide these variables only in your shell or an ignored local env file:
+Set `DATABASE_URL` to the pooled Neon connection string and set a strong `AUTH_SECRET`. Keep all connection strings, secrets, member contact details, and login credentials out of this README and out of version control. For seeded local users, provide these variables only in your shell or an ignored local env file:
 
 ```bash
-SEED_USER_ONE_EMAIL=person.one@example.invalid
-SEED_USER_ONE_PASSWORD=change-me-one
-SEED_USER_TWO_EMAIL=person.two@example.invalid
-SEED_USER_TWO_PASSWORD=change-me-two
+export SEED_USER_ONE_EMAIL="your-admin-email"
+export SEED_USER_ONE_PASSWORD="use-a-local-password"
+export SEED_USER_TWO_EMAIL="another-admin-email"
+export SEED_USER_TWO_PASSWORD="use-another-local-password"
 npm run db:push
 npm run db:seed
 npm run dev
 ```
+
+Replace the example values locally; do not commit real values or copy them into project documentation.
 
 `drizzle.config.ts` prefers `DATABASE_URL_UNPOOLED` when it is available for migrations, while the app uses the pooled `DATABASE_URL`.
 
