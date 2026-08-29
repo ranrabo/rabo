@@ -91,6 +91,10 @@ const darken = (hex: string, amount = .16) => {
 
 const dayPosition = (value: string) => ((toMinutes(value) - dayStart) / daySpan) * 100;
 const timeLabel = (hour: number) => `${String(hour).padStart(2, "0")}:00`;
+// A person's name reads quiet and grey until their row/bar is highlighted, then
+// it snaps to bold near-black. Shared by the timeline bars, the hero list and
+// the people palette so the highlight cue is consistent everywhere.
+const nameTone = (active: boolean) => `transition ${active ? "font-bold text-ink" : "font-normal text-ink/45"}`;
 
 function HourAxis({ short = false }: { short?: boolean }) {
   return <div className={`relative ${short ? "weekly-grid-height" : "day-grid-height"}`} aria-hidden="true">{Array.from({ length: 13 }, (_, i) => <span key={i} className="absolute right-3 -translate-y-1/2 font-display text-[10px] font-medium tabular-nums text-ink/45" style={{ top: `${(i / 12) * 100}%` }}>{i === 0 || i % 2 === 0 ? "–" : timeLabel(7 + i)}</span>)}</div>;
@@ -153,7 +157,7 @@ function BlockBar({ entry, lane, laneCount, compact = false, vertical = false, h
           boxShadow: dirty ? `0 0 0 1px ${color}` : confirmed ? `inset 0 0 0 1px ${wash(color, .5)}` : highlighted ? `0 0 0 1px ${highlightStroke}` : undefined,
         }}
       >
-        <span className={`pointer-events-none block truncate font-display text-[11px] font-bold leading-tight ${vertical ? "writing-mode-vertical [writing-mode:vertical-rl]" : ""}`}>{firstName(member.fullName)}</span>
+        <span className={`pointer-events-none block truncate font-display text-[11px] leading-tight ${nameTone(highlighted || dirty || confirmed)} ${vertical ? "writing-mode-vertical [writing-mode:vertical-rl]" : ""}`}>{firstName(member.fullName)}</span>
         {vertical ? null : <span className="pointer-events-none mt-1 block truncate text-[10px] font-medium text-ink/60">{formatTime(block.startTime)}–{formatTime(block.endTime)}</span>}
         <span onPointerDown={(event) => edit.onEdgePointerDown(event, block.id, "bottom")} onPointerMove={edit.onDragMove} onPointerUp={edit.onDragEnd} className="absolute inset-x-0 bottom-0 z-[3] h-2 cursor-ns-resize touch-none" aria-hidden="true" />
       </div>
@@ -168,7 +172,7 @@ function BlockBar({ entry, lane, laneCount, compact = false, vertical = false, h
     </div>;
   }
 
-  return <button type="button" onClick={() => onToggle(member.id)} aria-pressed={highlighted} aria-label={`Highlight ${firstName(member.fullName)}`} title={label} className="absolute z-[1] overflow-hidden rounded-[2px] border-l-[3px] px-2 py-1.5 text-left transition hover:z-10 hover:brightness-95" style={{ top, height, left, width, backgroundColor: highlighted ? highlightFill : restFill, borderLeftColor: highlighted ? highlightStroke : restStroke, boxShadow: highlighted ? `0 0 0 1px ${highlightStroke}` : undefined }}><span className={`block truncate font-display text-[11px] font-bold leading-tight ${vertical ? "writing-mode-vertical [writing-mode:vertical-rl]" : ""}`}>{firstName(member.fullName)}</span>{vertical ? null : <span className="mt-1 block truncate text-[10px] font-medium text-ink/60">{formatTime(block.startTime)}–{formatTime(block.endTime)}</span>}</button>;
+  return <button type="button" onClick={() => onToggle(member.id)} aria-pressed={highlighted} aria-label={`Highlight ${firstName(member.fullName)}`} title={label} className="absolute z-[1] overflow-hidden rounded-[2px] border-l-[3px] px-2 py-1.5 text-left transition hover:z-10 hover:brightness-95" style={{ top, height, left, width, backgroundColor: highlighted ? highlightFill : restFill, borderLeftColor: highlighted ? highlightStroke : restStroke, boxShadow: highlighted ? `0 0 0 1px ${highlightStroke}` : undefined }}><span className={`block truncate font-display text-[11px] leading-tight ${nameTone(highlighted)} ${vertical ? "writing-mode-vertical [writing-mode:vertical-rl]" : ""}`}>{firstName(member.fullName)}</span>{vertical ? null : <span className="mt-1 block truncate text-[10px] font-medium text-ink/60">{formatTime(block.startTime)}–{formatTime(block.endTime)}</span>}</button>;
 }
 
 function DayTimeline({ entries, mobile = false, short = false, accent, currentTime, highlightedPeople, onToggle, edit, weekday }: { entries: BlockWithMember[]; mobile?: boolean; short?: boolean; accent: string; currentTime?: string; highlightedPeople: Set<number>; onToggle: (personId: number) => void; edit?: BarEditApi; weekday?: number }) {
@@ -239,7 +243,7 @@ function TodayList({ entries, openSessions, highlightedPeople, onToggle }: { ent
   // clipped by the container as bare colour bars.
   const rows = [...entries.map(({ block, member }) => ({ key: `b${block.id}`, member, start: block.startTime, end: block.endTime })), ...openSessions.filter(({ member }) => !scheduledIds.has(member.id)).map(({ session, member }) => ({ key: `s${session.personId}`, member, start: session.startTime, end: "Now" }))];
   return <div className="flex flex-wrap gap-x-8 gap-y-1">
-    {rows.map(({ key, member, start, end }) => { const on = highlightedPeople.has(member.id); return <button key={key} type="button" onClick={() => onToggle(member.id)} aria-pressed={on} aria-label={`Highlight ${firstName(member.fullName)}`} className="flex items-center gap-3 py-1.5 text-left transition hover:bg-ink/[.03]"><span className="h-8 w-1 shrink-0 rounded-[1px] transition" style={{ backgroundColor: on ? brighten(member.color) : member.color, boxShadow: on ? `0 0 0 1px ${brighten(member.color)}` : undefined }} /><span className="flex items-center gap-3"><span className="whitespace-nowrap font-display text-sm font-bold">{firstName(member.fullName)}</span><span className="shrink-0 whitespace-nowrap font-display text-[11px] tabular-nums text-ink/55">{formatTime(start)}–{end === "Now" ? "now" : formatTime(end)}</span></span></button>; })}
+    {rows.map(({ key, member, start, end }) => { const on = highlightedPeople.has(member.id); return <button key={key} type="button" onClick={() => onToggle(member.id)} aria-pressed={on} aria-label={`Highlight ${firstName(member.fullName)}`} className="flex items-center gap-3 py-1.5 text-left transition hover:bg-ink/[.03]"><span className="h-8 w-1 shrink-0 rounded-[1px] transition" style={{ backgroundColor: on ? brighten(member.color) : member.color, boxShadow: on ? `0 0 0 1px ${brighten(member.color)}` : undefined }} /><span className="flex items-center gap-3"><span className={`whitespace-nowrap font-display text-sm ${nameTone(on)}`}>{firstName(member.fullName)}</span><span className="shrink-0 whitespace-nowrap font-display text-[11px] tabular-nums text-ink/55">{formatTime(start)}–{end === "Now" ? "now" : formatTime(end)}</span></span></button>; })}
   </div>;
 }
 
@@ -260,7 +264,7 @@ function PeoplePalette({ people, blocks, highlightedPeople, onToggle, admin = fa
     const alphabetized = [...people].sort((a, b) => a.fullName.localeCompare(b.fullName));
     return <section className="px-5 pb-10 pt-2 sm:px-10"><div className="flex flex-wrap gap-x-7 gap-y-3">{alphabetized.map((member) => {
       const on = highlightedPeople.has(member.id);
-      return <button key={member.id} type="button" onClick={() => onToggle(member.id)} aria-pressed={on} aria-label={`Highlight ${firstName(member.fullName)}`} className="flex items-center gap-2.5 text-left transition hover:opacity-80"><span className="h-3.5 w-3.5 shrink-0 rounded-[2px] transition" style={{ backgroundColor: on ? brighten(member.color) : member.color, boxShadow: on ? `0 0 0 1px ${brighten(member.color)}` : undefined }} /><span className={`font-display text-sm transition ${on ? "font-bold text-ink" : "font-normal text-ink/45"}`}>{firstName(member.fullName)}</span></button>;
+      return <button key={member.id} type="button" onClick={() => onToggle(member.id)} aria-pressed={on} aria-label={`Highlight ${firstName(member.fullName)}`} className="flex items-center gap-2.5 text-left transition hover:opacity-80"><span className="h-3.5 w-3.5 shrink-0 rounded-[2px] transition" style={{ backgroundColor: on ? brighten(member.color) : member.color, boxShadow: on ? `0 0 0 1px ${brighten(member.color)}` : undefined }} /><span className={`font-display text-sm ${nameTone(on)}`}>{firstName(member.fullName)}</span></button>;
     })}</div></section>;
   }
 
@@ -309,7 +313,7 @@ function PeoplePalette({ people, blocks, highlightedPeople, onToggle, admin = fa
           {admin ? <GripVertical size={13} className="mt-0.5 shrink-0 text-ink/25" aria-hidden="true" /> : null}
           <span className="mt-0.5 h-3.5 w-3.5 shrink-0 rounded-[2px] transition" style={{ backgroundColor: on ? brighten(member.color) : member.color, boxShadow: on ? `0 0 0 1px ${brighten(member.color)}` : undefined }} />
           <span className="min-w-0 flex-1">
-            <span className={`block truncate font-display text-sm transition ${on ? "font-bold text-ink" : "font-normal text-ink/45"}`}>{firstName(member.fullName)}</span>
+            <span className={`block truncate font-display text-sm ${nameTone(on)}`}>{firstName(member.fullName)}</span>
             <span className="mt-0.5 block font-display text-[11px] tabular-nums text-ink/55"><span className="font-bold text-ink/75">{formatHours(confirmed)}</span> conf · {formatHours(scheduled)} sched</span>
             <span className={`font-display text-[11px] font-bold tabular-nums ${deltaClass}`}>{deltaLabel} · {formatHours(required)} req</span>
           </span>
