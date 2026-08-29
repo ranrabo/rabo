@@ -37,9 +37,9 @@ function PersonChip({ color, size = "md" }: { color: string; size?: "sm" | "md" 
 function BlockBar({ entry, lane, laneCount, compact = false }: { entry: BlockWithMember; lane: number; laneCount: number; compact?: boolean }) {
   const { block, member } = entry;
   const color = hues[(member.id - 1) % hues.length];
-  const left = compact ? 4 : 8 + lane * (100 / laneCount);
-  const width = compact ? 92 : Math.max(100 / laneCount - 1.5, 10);
-  return <Link href={`/people/${member.id}`} title={`${member.fullName}, ${formatTime(block.startTime)}–${formatTime(block.endTime)}`} className="absolute z-[1] overflow-hidden rounded-[2px] border-l-[3px] px-2 py-1.5 transition hover:z-10 hover:brightness-95" style={{ top: `${dayPosition(block.startTime)}%`, height: `${Math.max(((toMinutes(block.endTime) - toMinutes(block.startTime)) / daySpan) * 100, compact ? 5 : 3.8)}%`, left: `${left}%`, width: `${width}%`, backgroundColor: wash(color, .16), borderLeftColor: color }}><span className="block truncate font-display text-[11px] font-bold leading-tight">{member.fullName}</span><span className="mt-1 block truncate text-[10px] font-medium text-ink/60">{formatTime(block.startTime)}–{formatTime(block.endTime)}</span></Link>;
+  const left = compact ? "4%" : `calc(6px + ${lane} * (100% - 10px) / ${laneCount})`;
+  const width = compact ? "92%" : `calc((100% - 10px) / ${laneCount} - 3px)`;
+  return <Link href={`/people/${member.id}`} title={`${member.fullName}, ${formatTime(block.startTime)}–${formatTime(block.endTime)}`} className="absolute z-[1] overflow-hidden rounded-[2px] border-l-[3px] px-2 py-1.5 transition hover:z-10 hover:brightness-95" style={{ top: `${dayPosition(block.startTime)}%`, height: `${Math.max(((toMinutes(block.endTime) - toMinutes(block.startTime)) / daySpan) * 100, compact ? 5 : 3.8)}%`, left, width, backgroundColor: wash(color, .16), borderLeftColor: color }}><span className="block truncate font-display text-[11px] font-bold leading-tight">{member.fullName}</span><span className="mt-1 block truncate text-[10px] font-medium text-ink/60">{formatTime(block.startTime)}–{formatTime(block.endTime)}</span></Link>;
 }
 
 function DayTimeline({ entries, now, showNow = true, mobile = false, short = false }: { entries: BlockWithMember[]; now: string; showNow?: boolean; mobile?: boolean; short?: boolean }) {
