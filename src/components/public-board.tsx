@@ -21,7 +21,7 @@ type BarEditApi = {
   isSaving: (id: number) => boolean;
   isConfirmed: (id: number) => boolean;
   isAttendOpen: (id: number) => boolean;
-  onDraw: (weekday: number, start: number, end: number, anchor: DOMRect) => void;
+  onDraw: (weekday: number, start: number, end: number) => void;
   onBarPointerDown: (event: React.PointerEvent, id: number) => void;
   onEdgePointerDown: (event: React.PointerEvent, id: number, edge: "top" | "bottom") => void;
   onDragMove: (event: React.PointerEvent) => void;
@@ -30,7 +30,7 @@ type BarEditApi = {
   onRevert: (id: number) => void;
   onToggleConfirm: (id: number) => void;
   onDismissAttend: () => void;
-  onOpenEditor: (id: number, anchor: DOMRect) => void;
+  onOpenEditor: (id: number) => void;
 };
 
 const hues = ["#EE7E61", "#A47351", "#D590B6", "#F28D9D", "#B5A131", "#459379", "#2095A6", "#5F70B3", "#A26A5F", "#668144", "#91517D", "#AB3A46", "#4F6E8F", "#7D7A86", "#D9A05B"];
@@ -136,8 +136,8 @@ function BlockBar({ entry, lane, laneCount, compact = false, vertical = false, h
     const confirmed = !dirty && block.id > 0 && edit.isConfirmed(block.id);
     const attendOpen = !dirty && block.id > 0 && edit.isAttendOpen(block.id);
     const showAttend = confirmed || attendOpen;
-    const clusterPos = vertical ? "right-0.5 top-0.5" : "left-full top-0 ml-1";
-    return <div className={`group absolute ${dirty || showAttend ? "z-20" : "z-[1]"}`} style={{ top, height, left, width }}>
+    const clusterPos = vertical ? "right-0.5 top-0.5 flex-col" : "left-full top-0 ml-1";
+    return <div data-block-id={block.id} className={`group absolute ${dirty || showAttend ? "z-20" : "z-[1]"}`} style={{ top, height, left, width }}>
       <div
         role="button"
         tabIndex={0}
@@ -158,7 +158,7 @@ function BlockBar({ entry, lane, laneCount, compact = false, vertical = false, h
         {vertical ? null : <span className="pointer-events-none mt-1 block truncate text-[10px] font-medium text-ink/60">{formatTime(block.startTime)}–{formatTime(block.endTime)}</span>}
         <span onPointerDown={(event) => edit.onEdgePointerDown(event, block.id, "bottom")} onPointerMove={edit.onDragMove} onPointerUp={edit.onDragEnd} className="absolute inset-x-0 bottom-0 z-[3] h-2 cursor-ns-resize touch-none" aria-hidden="true" />
       </div>
-      {!dirty && block.id > 0 ? <button type="button" onPointerDown={(event) => event.stopPropagation()} onClick={(event) => { event.stopPropagation(); edit.onOpenEditor(block.id, (event.currentTarget.parentElement as HTMLElement).getBoundingClientRect()); }} aria-label="Edit block (person or remove)" title="Edit block — person, remove" className={`absolute z-30 flex h-4 w-4 items-center justify-center rounded-full bg-paper-deep text-ink/40 opacity-0 shadow-sm transition hover:text-ink focus-visible:opacity-100 group-hover:opacity-100 ${vertical ? "left-0.5 top-0.5" : "right-0.5 top-0.5"}`}><Pencil size={9} strokeWidth={2.5} /></button> : null}
+      {!dirty && block.id > 0 ? <button type="button" onPointerDown={(event) => event.stopPropagation()} onClick={(event) => { event.stopPropagation(); edit.onOpenEditor(block.id); }} aria-label="Edit block (person or remove)" title="Edit block — person, remove" className={`absolute z-30 flex h-4 w-4 items-center justify-center rounded-full bg-paper-deep text-ink/40 opacity-0 shadow-sm transition hover:text-ink focus-visible:opacity-100 group-hover:opacity-100 ${vertical ? "bottom-0.5 right-0.5" : "right-0.5 top-0.5"}`}><Pencil size={9} strokeWidth={2.5} /></button> : null}
       {dirty ? <div className={`absolute z-30 flex gap-1 ${clusterPos}`}>
         <button type="button" disabled={saving} onPointerDown={(event) => event.stopPropagation()} onClick={() => edit.onCommit(block.id)} aria-label="Save this change" title="Save this change" className="flex h-[18px] w-[18px] items-center justify-center rounded-full border border-slate/40 bg-paper-deep text-slate shadow-sm transition hover:bg-slate hover:text-paper-deep disabled:opacity-50"><Check size={11} strokeWidth={3} /></button>
         <button type="button" disabled={saving} onPointerDown={(event) => event.stopPropagation()} onClick={() => edit.onRevert(block.id)} aria-label="Discard this change" title="Discard this change" className="flex h-[18px] w-[18px] items-center justify-center rounded-full border border-ink/25 bg-paper-deep text-ink/50 shadow-sm transition hover:bg-ink/10 hover:text-ink disabled:opacity-50"><X size={11} strokeWidth={3} /></button>
@@ -188,9 +188,13 @@ function DayTimeline({ entries, mobile = false, short = false, accent, currentTi
   // 07:00–19:00) so they line up with the HourAxis labels and the block bars,
   // which are all positioned by percentage. Pixel-based spacing drifts because
   // the container height is a responsive clamp().
-  const columnRule = short ? 20 : mobile ? 22 : 26;
-  const plannerGrid = `linear-gradient(to bottom, ${wash(accent, .36)} 0 1px, transparent 1px),linear-gradient(to bottom, ${wash(accent, .22)} 0 1px, transparent 1px),linear-gradient(to bottom, ${wash(accent, .13)} 0 1px, transparent 1px),repeating-linear-gradient(to right, ${wash(accent, .13)} 0 1px, transparent 1px ${columnRule}px)`;
-  const plannerSize = `100% calc(100% / 6),100% calc(100% / 12),100% calc(100% / 48),100% 100%`;
+  // Horizontal hour rules on every timeline. The faint vertical ruling is only
+  // for the wide single-day view — on the narrow weekly columns it collides with
+  // the column dividers and reads as doubled lines.
+  const columnRule = mobile ? 22 : 26;
+  const verticalRule = short ? "" : `,repeating-linear-gradient(to right, ${wash(accent, .13)} 0 1px, transparent 1px ${columnRule}px)`;
+  const plannerGrid = `linear-gradient(to bottom, ${wash(accent, .36)} 0 1px, transparent 1px),linear-gradient(to bottom, ${wash(accent, .22)} 0 1px, transparent 1px),linear-gradient(to bottom, ${wash(accent, .13)} 0 1px, transparent 1px)${verticalRule}`;
+  const plannerSize = `100% calc(100% / 6),100% calc(100% / 12),100% calc(100% / 48)${short ? "" : ",100% 100%"}`;
   const canDraw = Boolean(edit && weekday);
   const minuteAt = (clientY: number, element: HTMLElement) => {
     const rect = element.getBoundingClientRect();
@@ -203,13 +207,11 @@ function DayTimeline({ entries, mobile = false, short = false, accent, currentTi
       className="absolute inset-0 z-0 cursor-crosshair touch-none"
       onPointerDown={(event) => { if (event.button !== 0) return; const start = minuteAt(event.clientY, event.currentTarget); event.currentTarget.setPointerCapture(event.pointerId); setDraw({ start, end: start }); }}
       onPointerMove={(event) => setDraw((current) => current ? { start: current.start, end: minuteAt(event.clientY, event.currentTarget) } : current)}
-      onPointerUp={(event) => {
-        const surface = event.currentTarget.getBoundingClientRect();
+      onPointerUp={() => {
         setDraw((current) => {
           if (current && Math.abs(current.end - current.start) >= SLOT) {
             const range = clampRange(current.start, current.end);
-            const anchorTop = surface.top + ((range.start - dayStart) / daySpan) * surface.height;
-            edit!.onDraw(weekday!, range.start, range.end, new DOMRect(surface.left, anchorTop, surface.width, 8));
+            edit!.onDraw(weekday!, range.start, range.end);
           }
           return null;
         });
@@ -321,20 +323,44 @@ function WeekDateBox({ day, date, selected, accent, onClick }: { day: string; da
   return <button onClick={onClick} className="min-w-0 text-left" aria-label={`Select ${day} ${date.getDate()}`}><div className="mx-1 my-2 flex min-h-[94px] flex-col items-center justify-center border bg-[#FFFDF9] px-2 py-2 transition" style={{ borderColor: selected ? dateColor : "#EAEAEA", backgroundColor: selected ? wash(dateColor, .09) : "#FFFDF9", color: selected ? dateColor : undefined }}><span className="font-display text-[10px] font-extrabold tracking-[.14em]">{day.toUpperCase()}</span><span className="mt-1 font-display text-4xl font-extrabold leading-none tracking-[-.08em]">{date.getDate()}</span><span className="mt-2 font-display text-[10px] font-bold tracking-[.12em] text-ink/45">{date.toLocaleString("en-US", { month: "short" }).toUpperCase()}</span></div></button>;
 }
 
-function AdminPopover({ rect, entry, people, isNew, busy, onAssign, onRemove, onClose }: { rect: DOMRect; entry: BlockWithMember; people: PublicPerson[]; isNew: boolean; busy: boolean; onAssign: (personId: number) => void; onRemove: () => void; onClose: () => void }) {
-  const viewportWidth = typeof window === "undefined" ? 1280 : window.innerWidth;
-  const left = Math.max(12, Math.min(rect.left, viewportWidth - 220));
+function AdminPopover({ blockId, entry, people, isNew, busy, onAssign, onRemove, onClose }: { blockId: number; entry: BlockWithMember; people: PublicPerson[]; isNew: boolean; busy: boolean; onAssign: (personId: number) => void; onRemove: () => void; onClose: () => void }) {
+  const WIDTH = 172;
+  const PANEL_H = 150;
+  const [pos, setPos] = useState<{ left: number; top: number } | null>(null);
+  useEffect(() => {
+    const place = () => {
+      const bar = document.querySelector(`[data-block-id="${blockId}"]`);
+      if (!bar) { onClose(); return; }
+      const rect = bar.getBoundingClientRect();
+      const vw = window.innerWidth;
+      const vh = window.innerHeight;
+      let left = rect.right + 6;
+      if (left + WIDTH > vw - 8) left = rect.left - WIDTH - 6;
+      left = Math.min(Math.max(8, left), vw - WIDTH - 8);
+      let top = rect.top;
+      top = Math.min(Math.max(8, top), Math.max(8, vh - PANEL_H - 8));
+      setPos({ left, top });
+    };
+    place();
+    window.addEventListener("scroll", place, true);
+    window.addEventListener("resize", place);
+    return () => {
+      window.removeEventListener("scroll", place, true);
+      window.removeEventListener("resize", place);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [blockId]);
   return <>
     <div className="fixed inset-0 z-40" onPointerDown={onClose} aria-hidden="true" />
-    <div className="fixed z-50 w-52 rounded-md border border-ink/15 bg-[#FFFDF9] p-3 shadow-[0_12px_40px_rgba(43,41,38,.18)]" style={{ left, top: rect.bottom + 8 }} role="dialog" aria-label="Block settings">
-      <p className="font-display text-[10px] font-bold uppercase tracking-[.16em] text-ink/45">{isNew ? "New block" : "Edit block"}</p>
-      <label className="mt-2 block text-[11px] font-medium text-ink/55" htmlFor="admin-popover-person">Person</label>
-      <select id="admin-popover-person" value={entry.block.personId} disabled={busy} onChange={(event) => onAssign(Number(event.target.value))} className="mt-1 w-full rounded border border-ink/20 bg-white px-2 py-1.5 font-display text-xs font-bold text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-aqua">
+    {pos ? <div className="fixed z-50 rounded-md border border-ink/15 bg-[#FFFDF9] p-2.5 shadow-[0_12px_40px_rgba(43,41,38,.2)]" style={{ left: pos.left, top: pos.top, width: WIDTH }} role="dialog" aria-label="Block settings">
+      <p className="font-display text-[9px] font-bold uppercase tracking-[.16em] text-ink/45">{isNew ? "New block" : "Edit block"}</p>
+      <label className="mt-1.5 block text-[10px] font-medium text-ink/55" htmlFor="admin-popover-person">Person</label>
+      <select id="admin-popover-person" value={entry.block.personId} disabled={busy} onChange={(event) => onAssign(Number(event.target.value))} className="mt-1 w-full rounded border border-ink/20 bg-white px-1.5 py-1 font-display text-[11px] font-bold text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-aqua">
         {people.map((member) => <option key={member.id} value={member.id}>{member.fullName}</option>)}
       </select>
-      <p className="mt-2 font-display text-[11px] tabular-nums text-ink/50">{WEEKDAYS[entry.block.weekday - 1]} · {formatTime(entry.block.startTime)}–{formatTime(entry.block.endTime)}</p>
-      <button type="button" disabled={busy} onClick={onRemove} className="mt-3 flex w-full items-center justify-center gap-1.5 rounded border border-coral/30 px-2 py-1.5 font-display text-[11px] font-bold text-coral transition hover:bg-coral/10 disabled:opacity-50"><Trash2 size={12} /> Remove block</button>
-    </div>
+      <p className="mt-1.5 font-display text-[10px] tabular-nums text-ink/50">{WEEKDAYS[entry.block.weekday - 1]} · {formatTime(entry.block.startTime)}–{formatTime(entry.block.endTime)}</p>
+      <button type="button" disabled={busy} onClick={onRemove} className="mt-2 flex w-full items-center justify-center gap-1.5 rounded border border-coral/30 px-2 py-1 font-display text-[10px] font-bold text-coral transition hover:bg-coral/10 disabled:opacity-50"><Trash2 size={11} /> Remove block</button>
+    </div> : null}
   </>;
 }
 
@@ -372,7 +398,7 @@ export function PublicBoard({ today, now, people, blocks, openSessions, attendan
   const [edits, setEdits] = useState<Record<number, Edit>>({});
   const [savingIds, setSavingIds] = useState<Set<number>>(new Set());
   const [notice, setNotice] = useState<string | null>(null);
-  const [popover, setPopover] = useState<{ id: number; rect: DOMRect } | null>(null);
+  const [popover, setPopover] = useState<{ id: number } | null>(null);
   const [attendFor, setAttendFor] = useState<number | null>(null);
   const [confirmOverride, setConfirmOverride] = useState<Record<string, boolean>>({});
   const dragRef = useRef<DragState | null>(null);
@@ -513,17 +539,17 @@ export function PublicBoard({ today, now, people, blocks, openSessions, attendan
     if (drag.moved || drag.mode !== "move") return;
     // A plain click on a bar with a pending edit reopens its editor popover;
     // on a settled bar it toggles the attendance confirm controls.
-    if (drag.id < 0 || drag.id in edits) setPopover({ id: drag.id, rect: (event.currentTarget as HTMLElement).getBoundingClientRect() });
+    if (drag.id < 0 || drag.id in edits) setPopover({ id: drag.id });
     else setAttendFor((current) => current === drag.id ? null : drag.id);
   };
-  const drawBlock = (weekday: number, start: number, end: number, anchor: DOMRect) => {
+  const drawBlock = (weekday: number, start: number, end: number) => {
     const member = people[0];
     if (!member) return;
     const id = tempIdRef.current;
     tempIdRef.current -= 1;
     setEntries((current) => [...current, { member, block: { id, personId: member.id, weekday, startTime: toTime(start), endTime: toTime(end), effectiveFrom: today, effectiveTo: null, version: 1, loggedBy: null, createdAt: new Date(), updatedAt: new Date() } }]);
     setEdit(id, { weekday, start, end, personId: member.id });
-    setPopover({ id, rect: anchor });
+    setPopover({ id });
   };
   const assignPerson = (id: number, personId: number) => {
     const entry = entries.find((item) => item.block.id === id);
@@ -630,7 +656,7 @@ export function PublicBoard({ today, now, people, blocks, openSessions, attendan
     onRevert: revertBlock,
     onToggleConfirm: toggleConfirm,
     onDismissAttend: () => setAttendFor(null),
-    onOpenEditor: (id, anchor) => { setAttendFor(null); setPopover({ id, rect: anchor }); },
+    onOpenEditor: (id) => { setAttendFor(null); setPopover({ id }); },
   });
   const dayEditApi = admin ? makeEditApi(false) : undefined;
   const weekEditApi = admin ? makeEditApi(true) : undefined;
@@ -681,7 +707,7 @@ export function PublicBoard({ today, now, people, blocks, openSessions, attendan
       <section className="weekly-spread relative px-5 pb-10 pt-8 sm:px-10 sm:pt-10">
         <div className="mb-5 flex flex-wrap items-end justify-between gap-4"><div><p className="font-display text-[11px] font-bold tracking-[.18em] text-ink/55">THE WEEK</p><div className="mt-2 flex min-h-[128px] min-w-0 max-w-[480px] flex-col justify-between border border-[#EAEAEA] bg-[#FFFDF9] lg:ml-[52px]"><div className="flex flex-1 items-center justify-center px-4 py-5"><div className="grid w-full grid-cols-[minmax(0,0.72fr)_minmax(150px,1.6fr)_minmax(0,0.72fr)] border border-[#EAEAEA] font-display leading-none" style={{ color: monthAccent }}><div className="flex flex-col items-center justify-center border-r border-[#EAEAEA] px-2 py-4 sm:px-3"><span className="whitespace-nowrap text-[11px] font-bold tracking-[.12em]">{weekStartMonth}{weekStartMonth === weekEndMonth ? "" : `–${weekEndMonth}`}</span><span className="mt-2 whitespace-nowrap text-xs font-medium tracking-[.12em]">{weekStart.getFullYear()}</span></div><div className="flex min-w-0 items-center justify-center gap-2 border-r border-[#EAEAEA] px-2 py-3 text-[3.25rem] font-extrabold tracking-[-.06em] sm:px-4 sm:text-[4rem]"><span>{weekStart.getDate()}</span><span className="font-medium text-ink/30">–</span><span>{weekEnd.getDate()}</span></div><div className="flex flex-col items-center justify-center gap-2 px-2 py-4 text-ink/70 sm:px-4"><span className="whitespace-nowrap text-2xl font-extrabold sm:text-3xl">週</span><span className="whitespace-nowrap text-[11px] font-extrabold tracking-[.16em] text-ink/65 sm:text-xs">WEEK</span></div></div></div><div className="flex flex-wrap items-center justify-between gap-3 border-t border-[#EAEAEA] px-4 py-2.5 font-display text-[10px] font-medium tracking-[.14em] text-ink/45 sm:px-5"><span className="font-extrabold tracking-[.08em] text-ink/55">{dateLabel(0)} – {dateLabel(4)}</span><span>{fullDate}</span></div></div></div><div className="flex flex-wrap items-center gap-4 text-[11px] font-medium text-ink/55"><span className="flex items-center gap-1.5"><i className="h-2.5 w-4 border-t-[3px] border-ink bg-ink/10" /> booked</span><span className="flex items-center gap-1.5"><i className="h-2.5 w-4 border-t-[3px] border-coral bg-coral/15" /> in now</span><span className="flex items-center gap-1.5"><i className="h-2.5 w-4 border-t-[2px] border-dashed border-ink bg-ink/10" /> one-off</span></div></div>
         <div className="pointer-events-none absolute inset-x-0 top-[390px] z-10 hidden justify-between lg:flex"><button type="button" onClick={() => shiftSelectedDate(-7)} className="pointer-events-auto flex h-10 w-10 items-center justify-center text-ink/35 transition hover:text-ink" aria-label="Previous week"><ChevronLeft size={21} strokeWidth={1.5} /></button><button type="button" onClick={() => shiftSelectedDate(7)} className="pointer-events-auto flex h-10 w-10 items-center justify-center text-ink/35 transition hover:text-ink" aria-label="Next week"><ChevronRight size={21} strokeWidth={1.5} /></button></div>
-        <div className="hidden overflow-hidden lg:block"><div className="grid grid-cols-[52px_repeat(5,minmax(0,1fr))] divide-x divide-ink/15"><div className="flex items-center px-2 py-3 font-display text-[10px] font-bold tracking-[.18em] text-ink/55">TIME</div>{WEEKDAYS.slice(0, 5).map((day, index) => <WeekDateBox key={day} day={day} date={new Date(dateForDay(index))} selected={highlightedDays.has(index)} accent={monthAccent} onClick={() => toggleWeekday(index)} />)}<div><HourAxis short /></div>{WEEKDAYS.slice(0, 5).map((day, index) => <div key={`timeline-${day}`} className="relative min-w-0 px-1.5" style={highlightedDays.has(index) ? { backgroundColor: wash(monthAccent, .08) } : undefined}><DayTimeline entries={byDay[index]} accent={monthAccent} currentTime={dateValueForDay(index) === today ? clock : undefined} highlightedPeople={highlightedPeople} onToggle={togglePerson} edit={weekEditApi} weekday={index + 1} short /></div>)}</div></div>
+        <div className="hidden overflow-hidden lg:block"><div className="grid grid-cols-[52px_repeat(5,minmax(0,1fr))]"><div className="flex items-center px-2 py-3 font-display text-[10px] font-bold tracking-[.18em] text-ink/55">TIME</div>{WEEKDAYS.slice(0, 5).map((day, index) => <WeekDateBox key={day} day={day} date={new Date(dateForDay(index))} selected={highlightedDays.has(index)} accent={monthAccent} onClick={() => toggleWeekday(index)} />)}<div><HourAxis short /></div>{WEEKDAYS.slice(0, 5).map((day, index) => <div key={`timeline-${day}`} className="relative min-w-0 border-l border-ink/12 px-1.5" style={highlightedDays.has(index) ? { backgroundColor: wash(monthAccent, .08) } : undefined}><DayTimeline entries={byDay[index]} accent={monthAccent} currentTime={dateValueForDay(index) === today ? clock : undefined} highlightedPeople={highlightedPeople} onToggle={togglePerson} edit={weekEditApi} weekday={index + 1} short /></div>)}</div></div>
         <div className="space-y-2 lg:hidden">{WEEKDAYS.slice(0, 5).map((day, index) => <div key={day} className="flex w-full items-stretch gap-2" style={highlightedDays.has(index) ? { backgroundColor: wash(monthAccent, .08) } : undefined}><WeekDateBox day={day} date={new Date(dateForDay(index))} selected={highlightedDays.has(index)} accent={monthAccent} onClick={() => toggleWeekday(index)} /><button onClick={() => setSelectedDateValue(dateValueForDay(index))} className="relative min-w-0 flex-1 px-1 text-left"><span className="relative block h-full min-h-12"><span className="absolute inset-y-0 left-0 right-0 flex items-end gap-px">{Array.from({ length: 48 }, (_, slot) => { const start = 7 * 60 + slot * 15; const count = byDay[index].filter(({ block }) => toMinutes(block.startTime) <= start && toMinutes(block.endTime) > start).length; return <i key={slot} className="flex-1 bg-slate" style={{ height: `${count ? Math.max(15, count * 24) : 0}%`, opacity: count ? .78 : 0 }} />; })}</span></span></button></div>)}</div>
         <PeoplePalette people={people} blocks={boardBlocks} highlightedPeople={highlightedPeople} onToggle={togglePerson} admin={admin} onReorder={reorderPalette} confirmedHours={confirmedHoursByPerson} />
       </section>
@@ -689,7 +715,7 @@ export function PublicBoard({ today, now, people, blocks, openSessions, attendan
     </section>
     {admin && popover ? (() => {
       const target = boardBlocks.find((item) => item.block.id === popover.id);
-      return target ? <AdminPopover rect={popover.rect} entry={target} people={people} isNew={popover.id < 0} busy={savingIds.has(popover.id)} onAssign={(personId) => assignPerson(popover.id, personId)} onRemove={() => removeBlock(popover.id)} onClose={() => setPopover(null)} /> : null;
+      return target ? <AdminPopover blockId={popover.id} entry={target} people={people} isNew={popover.id < 0} busy={savingIds.has(popover.id)} onAssign={(personId) => assignPerson(popover.id, personId)} onRemove={() => removeBlock(popover.id)} onClose={() => setPopover(null)} /> : null;
     })() : null}
     {admin && notice ? <div className="fixed inset-x-0 top-3 z-[60] flex justify-center px-4" role="status">
       <div className="flex items-center gap-3 rounded-md border border-coral/40 bg-[#FFFDF9] px-3 py-2 font-display text-xs font-bold text-ink shadow-[0_12px_40px_rgba(43,41,38,.18)]">
