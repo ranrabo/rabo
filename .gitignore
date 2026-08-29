@@ -11,3 +11,4 @@ drizzle/meta/
 *.tsbuildinfo
 .vercel
 .DS_Store
+.claude/settings.local.json
