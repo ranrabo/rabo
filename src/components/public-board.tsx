@@ -122,7 +122,7 @@ function TodayList({ entries, openSessions, highlightedPeople, onToggle }: { ent
 }
 
 function PeoplePalette({ people, highlightedPeople, onToggle }: { people: PublicPerson[]; highlightedPeople: Set<number>; onToggle: (personId: number) => void }) {
-  return <section className="px-5 pb-10 pt-2 sm:px-10"><p className="font-display text-[10px] font-bold tracking-[.18em] text-ink/45">PEOPLE</p><div className="mt-4 flex flex-wrap gap-x-7 gap-y-3">{people.map((member) => <button key={member.id} type="button" onClick={() => onToggle(member.id)} aria-pressed={highlightedPeople.has(member.id)} aria-label={`Highlight ${member.fullName}`} className="flex items-center gap-2.5 text-left transition hover:opacity-80"><span className="h-7 w-1 rounded-[1px] transition" style={{ backgroundColor: highlightedPeople.has(member.id) ? brighten(member.color) : member.color, boxShadow: highlightedPeople.has(member.id) ? `0 0 0 1px ${brighten(member.color)}` : undefined }} /><span className="font-display text-sm font-bold">{member.fullName}</span></button>)}</div></section>;
+  return <section className="px-5 pb-10 pt-2 sm:px-10"><p className="font-display text-[10px] font-bold tracking-[.18em] text-ink/45">PEOPLE</p><div className="mt-4 flex flex-wrap gap-x-7 gap-y-3">{people.map((member) => <button key={member.id} type="button" onClick={() => onToggle(member.id)} aria-pressed={highlightedPeople.has(member.id)} aria-label={`Highlight ${member.fullName}`} className="flex items-center gap-2.5 text-left transition hover:opacity-80"><span className="h-3.5 w-3.5 shrink-0 rounded-[2px] transition" style={{ backgroundColor: highlightedPeople.has(member.id) ? brighten(member.color) : member.color, boxShadow: highlightedPeople.has(member.id) ? `0 0 0 1px ${brighten(member.color)}` : undefined }} /><span className="font-display text-sm font-bold">{member.fullName}</span></button>)}</div></section>;
 }
 
 function WeekDateBox({ day, date, selected, accent, onClick }: { day: string; date: Date; selected: boolean; accent: string; onClick: () => void }) {
@@ -159,7 +159,7 @@ export function PublicBoard({ today, now, people, blocks, openSessions }: { toda
   const dateValueForDay = (index: number) => new Date(dateForDay(index)).toISOString().slice(0, 10);
   return <div className="min-h-screen px-4 pb-20 sm:px-8" style={{ backgroundColor: wash(monthAccent, .12) }}>
     <section className="mx-auto max-w-[1280px] overflow-hidden border-x border-ink/20 bg-[#FFFDF9] shadow-[0_16px_50px_rgba(43,41,38,.08)]">
-      <div className="flex items-center justify-between gap-4 bg-paper-deep px-5 py-4 sm:px-10">
+      <div className="flex w-full items-center justify-between gap-4 bg-paper-deep px-5 py-4 sm:w-[90%] sm:px-6">
         <Link href="/" aria-label="RABO home" className="flex items-end gap-3"><span className="font-display text-2xl font-extrabold tracking-[-.06em]">RABO</span><span className="text-sm font-extrabold tracking-[.16em]" style={{ color: monthAccent }}>ランラボ</span></Link>
         <a href="https://yangran.org/" target="_blank" rel="noreferrer" className="border border-ink/25 px-3 py-2 font-display text-[11px] font-bold tracking-[.08em] text-ink/60 transition hover:border-ink/60 hover:text-ink">yangran.org ↗</a>
       </div>
