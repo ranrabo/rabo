@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Check, ChevronLeft, ChevronRight, GripVertical, Pencil, Trash2, X } from "lucide-react";
 import type { PublicPerson, WeeklyBlock } from "@/db/schema";
 import { addDays, firstName, formatHours, formatTime, getMonday, toMinutes, WEEKDAYS } from "@/lib/utils";
@@ -141,8 +141,8 @@ function BlockBar({ entry, lane, laneCount, compact = false, vertical = false, h
       <div
         role="button"
         tabIndex={0}
-        aria-label={`${label}. Drag to move, drag an edge to resize, click to confirm attendance.`}
-        title={`${label} — drag to move, edges to resize, click to confirm attendance`}
+        aria-label={`${label}. Drag to move, drag the lower edge to resize, click to confirm attendance.`}
+        title={`${label} — drag to move, lower edge to resize, click to confirm attendance`}
         onPointerDown={(event) => edit.onBarPointerDown(event, block.id)}
         onPointerMove={edit.onDragMove}
         onPointerUp={edit.onDragEnd}
@@ -153,7 +153,6 @@ function BlockBar({ entry, lane, laneCount, compact = false, vertical = false, h
           boxShadow: dirty ? `0 0 0 1px ${color}` : confirmed ? `inset 0 0 0 1px ${wash(color, .5)}` : highlighted ? `0 0 0 1px ${highlightStroke}` : undefined,
         }}
       >
-        <span onPointerDown={(event) => edit.onEdgePointerDown(event, block.id, "top")} onPointerMove={edit.onDragMove} onPointerUp={edit.onDragEnd} className="absolute inset-x-0 top-0 z-[3] h-2 cursor-ns-resize touch-none" aria-hidden="true" />
         <span className={`pointer-events-none block truncate font-display text-[11px] font-bold leading-tight ${vertical ? "writing-mode-vertical [writing-mode:vertical-rl]" : ""}`}>{firstName(member.fullName)}</span>
         {vertical ? null : <span className="pointer-events-none mt-1 block truncate text-[10px] font-medium text-ink/60">{formatTime(block.startTime)}–{formatTime(block.endTime)}</span>}
         <span onPointerDown={(event) => edit.onEdgePointerDown(event, block.id, "bottom")} onPointerMove={edit.onDragMove} onPointerUp={edit.onDragEnd} className="absolute inset-x-0 bottom-0 z-[3] h-2 cursor-ns-resize touch-none" aria-hidden="true" />
@@ -389,8 +388,15 @@ function AdminNote({ initial, onSave }: { initial: string; onSave: (body: string
 
 export function PublicBoard({ today, now, people, blocks, openSessions, attendance = [], adminNote = "", admin = false }: { today: string; now: string; people: PublicPerson[]; blocks: BlockWithMember[]; openSessions: SessionWithMember[]; attendance?: { weeklyBlockId: number; attendDate: string }[]; adminNote?: string; admin?: boolean }) {
   const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
   const [, startSaving] = useTransition();
-  const [selectedDateValue, setSelectedDateValue] = useState(today);
+  // Seed from ?d= so a post-save router.refresh() (or a remount) keeps the board
+  // on the day the admin was editing instead of snapping back to today.
+  const [selectedDateValue, setSelectedDateValue] = useState(() => {
+    const fromUrl = searchParams.get("d");
+    return fromUrl && /^\d{4}-\d{2}-\d{2}$/.test(fromUrl) ? fromUrl : today;
+  });
   const [clock, setClock] = useState(now);
   const [highlightedPeople, setHighlightedPeople] = useState<Set<number>>(new Set());
   const [highlightedDays, setHighlightedDays] = useState<Set<number>>(() => new Set([new Date(`${today}T12:00:00`).getDay() === 0 ? 6 : new Date(`${today}T12:00:00`).getDay() - 1]));
@@ -415,6 +421,16 @@ export function PublicBoard({ today, now, people, blocks, openSessions, attendan
       return next;
     });
   }, [confirmedSet]);
+  useEffect(() => {
+    const current = searchParams.get("d") ?? "";
+    const desired = selectedDateValue === today ? "" : selectedDateValue;
+    if (current === desired) return;
+    const params = new URLSearchParams(Array.from(searchParams.entries()));
+    if (desired) params.set("d", desired); else params.delete("d");
+    const query = params.toString();
+    router.replace(query ? `${pathname}?${query}` : pathname, { scroll: false });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedDateValue, today]);
   useEffect(() => {
     const tick = () => setClock(new Intl.DateTimeFormat("en-GB", { timeZone: "America/New_York", hour: "2-digit", minute: "2-digit", hour12: false }).format(new Date()));
     const timer = window.setInterval(tick, 60_000);
