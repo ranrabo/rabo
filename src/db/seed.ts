@@ -21,9 +21,9 @@ const seed = async () => {
   const peopleForBlocks = existingPeople.length ? existingPeople : await db
     .insert(person)
     .values([
-      { fullName: "Person One", researchArea: "Computational fluid dynamics", sortOrder: 1 },
-      { fullName: "Person Two", researchArea: "Environmental sensing", sortOrder: 2 },
-      { fullName: "Person Three", researchArea: "Materials characterization", sortOrder: 3 },
+      { fullName: "Person One", color: "#EE7E61", researchArea: "Computational fluid dynamics", sortOrder: 1 },
+      { fullName: "Person Two", color: "#459379", researchArea: "Environmental sensing", sortOrder: 2 },
+      { fullName: "Person Three", color: "#5F70B3", researchArea: "Materials characterization", sortOrder: 3 },
     ])
     .returning();
 

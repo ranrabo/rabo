@@ -25,7 +25,7 @@ npm run dev
 
 ## Data model
 
-- `person` stores lab member names, optional unique email addresses, research areas, and active/order settings. Email is only selected in private admin/report queries.
+- `person` stores lab member names, optional unique email addresses, a persistent display color, research areas, and active/order settings. Email is only selected in private admin/report queries.
 - `weekly_block` stores recurring scheduled times with effective date ranges.
 - `lab_session` stores admin-entered or quick-logged time in the lab.
 - `progress_entry` is reserved for future admin tracking such as milestones, status, notes, and measurements.
