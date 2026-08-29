@@ -84,11 +84,11 @@ button, a, input, select, textarea { -webkit-tap-highlight-color: transparent; }
 .weekly-spread > .hidden > .grid > div:first-child { font-size: 0; }
 .weekly-spread > div:first-child > div:last-child { display: none; }
 .day-grid-height, .day-timeline { height: clamp(460px, 110vw, 600px); }
-.weekly-grid-height, .weekly-day-grid { aspect-ratio: 1 / 1.14; min-height: 260px; }
+.weekly-grid-height, .weekly-day-grid { height: clamp(360px, 42vw, 520px); }
 
 @media (min-width: 768px) {
   .day-grid-height, .day-timeline { height: clamp(560px, 52vw, 720px); }
-  .weekly-grid-height, .weekly-day-grid { min-height: 0; }
+  .weekly-grid-height, .weekly-day-grid { height: clamp(360px, 42vw, 520px); }
 }
 
 @media (prefers-reduced-motion: reduce) {
