@@ -1,6 +1,6 @@
 import { and, asc, eq, gte, isNull, lte, or } from "drizzle-orm";
 import { db } from "@/db";
-import { adminNote, blockAttendance, labSession, person, weeklyBlock } from "@/db/schema";
+import { blockAttendance, labSession, person, weeklyBlock } from "@/db/schema";
 import { addDays, getLabNow, getLabToday, getMonday, getWeekdayIndex } from "@/lib/utils";
 
 const publicMember = {
@@ -17,7 +17,7 @@ export const getHomeData = async () => {
   const today = getLabToday();
   const monday = getMonday(today);
   const sunday = addDays(monday, 6);
-  const [people, blocks, openSessions, attendance, note] = await Promise.all([
+  const [people, blocks, openSessions, attendance] = await Promise.all([
     db.select(publicMember).from(person).where(eq(person.active, true)).orderBy(asc(person.sortOrder), asc(person.fullName)),
     db
       .select({ block: weeklyBlock, member: publicMember })
@@ -34,10 +34,9 @@ export const getHomeData = async () => {
       .select({ weeklyBlockId: blockAttendance.weeklyBlockId, attendDate: blockAttendance.attendDate })
       .from(blockAttendance)
       .where(and(gte(blockAttendance.attendDate, monday), lte(blockAttendance.attendDate, sunday))),
-    db.select({ body: adminNote.body }).from(adminNote).limit(1),
   ]);
 
-  return { today, monday, now: getLabNow(), todayWeekday: getWeekdayIndex(today), people, blocks, openSessions, attendance, adminNote: note[0]?.body ?? "" };
+  return { today, monday, now: getLabNow(), todayWeekday: getWeekdayIndex(today), people, blocks, openSessions, attendance };
 };
 
 export const getAdminToday = async () => {

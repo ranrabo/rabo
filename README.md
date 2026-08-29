@@ -1,13 +1,11 @@
 # rabo / lab occupancy
 
-Rabo is a shared lab-room schedule and occupancy log. The public board shows the active team and weekly schedule. The private admin area can edit the schedule, record attendance and lab sessions, maintain the team list, and generate weekly reports.
+Rabo is a shared lab-room schedule and occupancy log. The public board shows the active team and weekly schedule.
 
 ## What the app does
 
 - `/` — public read-only weekly schedule, daily view, calendar navigation, current open sessions, and member highlighting.
 - `/login` — admin sign-in. On an empty database, the first visit can create the initial account with a password of at least 12 characters.
-- `/admin` — protected schedule editor and room log. Admins can add, move, resize, reassign, and remove schedule blocks; add or deactivate people; set weekly hour targets; confirm attendance; start/end or manually edit lab sessions; reorder the team palette; and save a private weekly note.
-- `/admin/report` — protected date-range report comparing scheduled hours with completed logged hours, with CSV download.
 
 The app uses `America/New_York` for “today” and the live clock. Schedule blocks use 15-minute increments between 07:00 and 19:00.
 
@@ -64,7 +62,7 @@ The repository’s generated SQL describes schema changes; the current package s
 - `app_user` — bcrypt password hashes and admin display names used by Auth.js credentials authentication.
 - `progress_entry` — reserved for future progress tracking.
 
-Public queries use explicit member projections and omit email and other private fields. Admin and report pages are protected by Auth.js middleware and server-side checks.
+Public queries use explicit member projections and omit email and other private fields. Private routes are protected by Auth.js middleware and server-side checks.
 
 ## Seeding and maintenance scripts
 

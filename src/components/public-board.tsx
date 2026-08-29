@@ -417,24 +417,46 @@ function AdminPopover({ blockId, entry, people, isNew, busy, onAssign, onRemove,
   </>;
 }
 
-function AdminNote({ initial, onSave }: { initial: string; onSave: (body: string) => Promise<void> }) {
-  const [body, setBody] = useState(initial);
-  const [status, setStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
-  const savedRef = useRef(initial);
-  // Only adopt an external change; a refresh that returns our own last-saved text
-  // must not clobber whatever the admin is currently typing.
-  useEffect(() => { if (initial !== savedRef.current) { savedRef.current = initial; setBody(initial); } }, [initial]);
+// Free-text notes for whichever day the board is showing. Loaded from
+// /api/admin/note when the day changes, saved (per day) on blur.
+function AdminNote({ date, onNotice }: { date: string; onNotice: (message: string | null) => void }) {
+  const [body, setBody] = useState("");
+  const [status, setStatus] = useState<"loading" | "idle" | "saving" | "saved" | "error">("loading");
+  const savedRef = useRef("");
+  const dayLabel = new Date(`${date}T12:00:00`).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
+
+  useEffect(() => {
+    const controller = new AbortController();
+    setStatus("loading");
+    fetch(`/api/admin/note?date=${date}`, { signal: controller.signal, cache: "no-store" })
+      .then((response) => (response.ok ? response.json() : { body: "" }))
+      .then((data) => {
+        const next = typeof data?.body === "string" ? data.body : "";
+        savedRef.current = next;
+        setBody(next);
+        setStatus("idle");
+      })
+      .catch((error) => { if (error?.name !== "AbortError") setStatus("idle"); });
+    return () => controller.abort();
+  }, [date]);
+
   const commit = () => {
     if (body === savedRef.current) return;
+    const form = new FormData();
+    form.set("date", date);
+    form.set("body", body);
     setStatus("saving");
-    onSave(body).then(() => { savedRef.current = body; setStatus("saved"); }).catch(() => setStatus("error"));
+    saveAdminNote(form)
+      .then(() => { savedRef.current = body; setStatus("saved"); onNotice(null); })
+      .catch((error) => { setStatus("error"); onNotice(error instanceof Error ? error.message : "Could not save the note."); });
   };
+
   return <div className="flex flex-col">
     <div className="flex items-center justify-between">
-      <label htmlFor="admin-note" className="font-display text-[10px] font-bold uppercase tracking-[.18em] text-ink/35">Notes</label>
-      <span className="font-display text-[10px] tracking-[.1em] text-ink/30" aria-live="polite">{status === "saving" ? "saving…" : status === "saved" ? "saved" : status === "error" ? "not saved" : ""}</span>
+      <label htmlFor="admin-note" className="font-display text-[10px] font-bold uppercase tracking-[.18em] text-ink/35">Notes · {dayLabel}</label>
+      <span className="font-display text-[10px] tracking-[.1em] text-ink/30" aria-live="polite">{status === "loading" ? "…" : status === "saving" ? "saving…" : status === "saved" ? "saved" : status === "error" ? "not saved" : ""}</span>
     </div>
-    <textarea id="admin-note" value={body} onChange={(event) => { setBody(event.target.value); setStatus("idle"); }} onBlur={commit} rows={4} placeholder="Notes for the week…" className="mt-1.5 min-h-[130px] w-full flex-1 resize-y border border-ink/15 bg-white px-3 py-2 font-quote text-[13px] leading-relaxed text-ink/75 placeholder:text-ink/25 transition focus:border-ink/40 focus:outline-none sm:text-sm" />
+    <textarea id="admin-note" value={body} onChange={(event) => { setBody(event.target.value); setStatus("idle"); }} onBlur={commit} rows={4} placeholder={`Notes for ${dayLabel}…`} className="mt-1.5 min-h-[130px] w-full flex-1 resize-y border border-ink/15 bg-white px-3 py-2 font-quote text-[13px] leading-relaxed text-ink/75 placeholder:text-ink/25 transition focus:border-ink/40 focus:outline-none sm:text-sm" />
   </div>;
 }
 
@@ -552,7 +574,7 @@ function ScheduleControl({ people, today, selectedDateValue, selectedDay, dayEnt
   </div>;
 }
 
-export function PublicBoard({ today, now, people, blocks, openSessions, attendance = [], adminNote = "", admin = false }: { today: string; now: string; people: PublicPerson[]; blocks: BlockWithMember[]; openSessions: SessionWithMember[]; attendance?: { weeklyBlockId: number; attendDate: string }[]; adminNote?: string; admin?: boolean }) {
+export function PublicBoard({ today, now, people, blocks, openSessions, attendance = [], admin = false }: { today: string; now: string; people: PublicPerson[]; blocks: BlockWithMember[]; openSessions: SessionWithMember[]; attendance?: { weeklyBlockId: number; attendDate: string }[]; admin?: boolean }) {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -802,17 +824,6 @@ export function PublicBoard({ today, now, people, blocks, openSessions, attendan
       }
     });
   };
-  const saveNote = async (body: string) => {
-    const form = new FormData();
-    form.set("body", body);
-    try {
-      await saveAdminNote(form);
-      setNotice(null);
-    } catch (error) {
-      setNotice(error instanceof Error ? error.message : "Could not save the note.");
-      throw error;
-    }
-  };
   const reorderPalette = (ids: number[]) => {
     if (!admin) return;
     const form = new FormData();
@@ -903,7 +914,7 @@ export function PublicBoard({ today, now, people, blocks, openSessions, attendan
       </div>
       {admin ? <div className="px-5 pt-8 sm:px-6">
         <div className="grid items-stretch gap-6 sm:ml-[104px] lg:grid-cols-2 lg:gap-8">
-          <AdminNote initial={adminNote} onSave={saveNote} />
+          <AdminNote date={selectedDateValue} onNotice={setNotice} />
           <ScheduleControl people={people} today={today} selectedDateValue={selectedDateValue} selectedDay={selectedDay} dayEntries={currentEntries} onNotice={setNotice} onSaved={() => router.refresh()} />
         </div>
       </div> : null}

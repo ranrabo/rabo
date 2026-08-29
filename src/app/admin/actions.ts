@@ -214,11 +214,17 @@ export const clearAttendance = async (formData: FormData) => {
 
 export const saveAdminNote = async (formData: FormData) => {
   const session = await requireAdmin();
+  const noteDate = text(formData, "date");
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(noteDate)) throw new Error("Pick a day for this note.");
   const body = String(formData.get("body") ?? "").slice(0, 8000);
-  await db
-    .insert(adminNote)
-    .values({ id: 1, body, updatedBy: session.user?.name || "Admin", updatedAt: new Date() })
-    .onConflictDoUpdate({ target: adminNote.id, set: { body, updatedBy: session.user?.name || "Admin", updatedAt: new Date() } });
+  if (!body.trim()) {
+    await db.delete(adminNote).where(eq(adminNote.noteDate, noteDate));
+  } else {
+    await db
+      .insert(adminNote)
+      .values({ noteDate, body, updatedBy: session.user?.name || "Admin", updatedAt: new Date() })
+      .onConflictDoUpdate({ target: adminNote.noteDate, set: { body, updatedBy: session.user?.name || "Admin", updatedAt: new Date() } });
+  }
   revalidatePath("/admin");
 };
 

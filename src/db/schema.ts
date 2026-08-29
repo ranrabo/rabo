@@ -111,9 +111,9 @@ export const appUser = pgTable("app_user", {
   displayName: text("display_name").notNull(),
 });
 
-// Single shared free-text scratchpad shown on the admin board (row id is always 1).
+// Free-text admin scratchpad, one per calendar day (keyed by note_date).
 export const adminNote = pgTable("admin_note", {
-  id: integer("id").primaryKey().default(1),
+  noteDate: date("note_date").primaryKey(),
   body: text("body").notNull().default(""),
   updatedBy: text("updated_by"),
   updatedAt: timestamp("updated_at", { mode: "date" }).notNull().defaultNow(),
