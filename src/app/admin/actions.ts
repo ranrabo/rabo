@@ -133,3 +133,11 @@ export const deactivatePerson = async (formData: FormData) => {
   await db.update(person).set({ active: false }).where(eq(person.id, Number(text(formData, "id"))));
   refresh();
 };
+
+export const reorderPeople = async (formData: FormData) => {
+  await requireAdmin();
+  const ids = text(formData, "ids").split(",").map(Number).filter((id) => Number.isInteger(id) && id > 0);
+  if (!ids.length) throw new Error("Nothing to reorder.");
+  await Promise.all(ids.map((id, index) => db.update(person).set({ sortOrder: index + 1 }).where(eq(person.id, id))));
+  refresh();
+};

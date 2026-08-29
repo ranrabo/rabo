@@ -22,6 +22,7 @@ export const person = pgTable(
     researchArea: text("research_area").notNull(),
     active: boolean("active").notNull().default(true),
     sortOrder: integer("sort_order").notNull().default(0),
+    weeklyRequiredHours: integer("weekly_required_hours").notNull().default(0),
   },
   (table) => [check("person_color_hex", sql`${table.color} ~ '^#[0-9A-Fa-f]{6}$'`)],
 );
@@ -112,7 +113,7 @@ export const progressEntryRelations = relations(progressEntry, ({ one }) => ({
 }));
 
 export type Person = typeof person.$inferSelect;
-export type PublicPerson = Pick<Person, "id" | "fullName" | "researchArea" | "active" | "sortOrder" | "color">;
+export type PublicPerson = Pick<Person, "id" | "fullName" | "researchArea" | "active" | "sortOrder" | "color" | "weeklyRequiredHours">;
 export type WeeklyBlock = typeof weeklyBlock.$inferSelect;
 export type LabSession = typeof labSession.$inferSelect;
 export type ProgressEntry = typeof progressEntry.$inferSelect;

@@ -1,5 +1,5 @@
 import { config } from "dotenv";
-import { asc, inArray, not } from "drizzle-orm";
+import { asc, eq, inArray, not } from "drizzle-orm";
 import { person, weeklyBlock } from "./schema";
 
 // Replaces every weekly_block row with the current team's recurring schedule.
@@ -44,6 +44,12 @@ const SCHEDULE: Record<string, Slot[]> = {
   Richie: [["Mon", "15:30", "17:00"], ["Tue", "09:30", "12:00"], ["Wed", "15:30", "17:00"], ["Thu", "09:30", "12:00"], ["Thu", "14:00", "17:00"], ["Fri", "13:00", "17:00"]],
   Tiba: [["Mon", "14:00", "16:00"], ["Tue", "08:00", "09:00"], ["Wed", "14:00", "17:00"]],
   Tyler: [["Mon", "08:00", "09:30"], ["Mon", "11:00", "13:00"], ["Tue", "08:00", "09:00"], ["Wed", "08:00", "09:00"], ["Wed", "11:00", "12:30"], ["Thu", "08:00", "09:30"], ["Fri", "11:00", "13:00"]],
+};
+
+// Minimum hours each student is expected in the lab per week.
+const REQUIRED: Record<string, number> = {
+  Alexis: 10, Asher: 10, Crosby: 6, Emmett: 6, Erica: 6,
+  Finnur: 10, Hayden: 15, Richie: 15, Tiba: 6, Tyler: 10,
 };
 
 const NEW_PERSON_COLORS = ["#EE7E61", "#459379", "#5F70B3", "#D590B6", "#B5A131", "#2095A6", "#A26A5F", "#668144", "#91517D", "#4F6E8F"];
@@ -99,6 +105,7 @@ const run = async () => {
   for (const name of names) console.log(`  ${name.padEnd(8)} -> #${matchFor(name)!.id} ${matchFor(name)!.fullName}`);
   console.log(`\nplan: delete ${existing.length} existing weekly_block row(s), insert ${rows.length} (${rows.length / SEGMENTS.length} slots x ${SEGMENTS.length} term segments)`);
   console.log(`segments: ${SEGMENTS.map((s) => `${s.effectiveFrom}..${s.effectiveTo}`).join("  +  ")}`);
+  console.log(`also: set weekly_required_hours (${names.map((n) => `${n} ${REQUIRED[n]}`).join(", ")}) and renumber sort_order A-Z`);
   if (deactivateOthers) console.log(`deactivate ${others.length} non-team person row(s): ${others.map((row) => row.fullName).join(", ") || "(none)"}`);
   else if (others.length) console.log(`note: ${others.length} other active person row(s) left untouched (pass --deactivate-others to hide them): ${others.map((row) => row.fullName).join(", ")}`);
 
@@ -112,7 +119,11 @@ const run = async () => {
   if (deactivateOthers && others.length) {
     await db.update(person).set({ active: false }).where(not(inArray(person.id, teamIds)));
   }
-  console.log(`\nDone. weekly_block now has ${rows.length} rows.`);
+  const alpha = [...names].sort((a, b) => a.localeCompare(b));
+  await Promise.all(alpha.map((name, index) =>
+    db.update(person).set({ weeklyRequiredHours: REQUIRED[name], sortOrder: index + 1 }).where(eq(person.id, matchFor(name)!.id)),
+  ));
+  console.log(`\nDone. weekly_block now has ${rows.length} rows; required hours + A-Z order set for ${names.length} people.`);
 };
 
 run().catch((error: unknown) => {

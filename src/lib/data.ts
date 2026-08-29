@@ -10,6 +10,7 @@ const publicMember = {
   color: person.color,
   active: person.active,
   sortOrder: person.sortOrder,
+  weeklyRequiredHours: person.weeklyRequiredHours,
 };
 
 export const getHomeData = async () => {

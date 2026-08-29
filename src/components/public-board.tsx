@@ -3,11 +3,11 @@
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Check, ChevronLeft, ChevronRight, Trash2, X } from "lucide-react";
+import { Check, ChevronLeft, ChevronRight, GripVertical, Trash2, X } from "lucide-react";
 import type { PublicPerson, WeeklyBlock } from "@/db/schema";
-import { addDays, firstName, formatTime, getMonday, toMinutes, WEEKDAYS } from "@/lib/utils";
+import { addDays, firstName, formatHours, formatTime, getMonday, toMinutes, WEEKDAYS } from "@/lib/utils";
 import { quoteForDate } from "@/lib/quotes";
-import { createWeeklyBlock, deleteWeeklyBlock, updateWeeklyBlock } from "@/app/admin/actions";
+import { createWeeklyBlock, deleteWeeklyBlock, reorderPeople, updateWeeklyBlock } from "@/app/admin/actions";
 
 type BlockWithMember = { block: WeeklyBlock; member: PublicPerson };
 type SessionWithMember = { session: { personId: number; startTime: string; endTime: string | null }; member: PublicPerson };
@@ -207,9 +207,72 @@ function TodayList({ entries, openSessions, highlightedPeople, onToggle }: { ent
   </div>;
 }
 
-function PeoplePalette({ people, highlightedPeople, onToggle }: { people: PublicPerson[]; highlightedPeople: Set<number>; onToggle: (personId: number) => void }) {
-  const alphabetizedPeople = [...people].sort((a, b) => a.fullName.localeCompare(b.fullName));
-  return <section className="px-5 pb-10 pt-2 sm:px-10"><p className="font-display text-[10px] font-bold tracking-[.18em] text-ink/45">PEOPLE</p><div className="mt-4 flex flex-wrap gap-x-7 gap-y-3">{alphabetizedPeople.map((member) => <button key={member.id} type="button" onClick={() => onToggle(member.id)} aria-pressed={highlightedPeople.has(member.id)} aria-label={`Highlight ${firstName(member.fullName)}`} className="flex items-center gap-2.5 text-left transition hover:opacity-80"><span className="h-3.5 w-3.5 shrink-0 rounded-[2px] transition" style={{ backgroundColor: highlightedPeople.has(member.id) ? brighten(member.color) : member.color, boxShadow: highlightedPeople.has(member.id) ? `0 0 0 1px ${brighten(member.color)}` : undefined }} /><span className="font-display text-sm font-bold">{firstName(member.fullName)}</span></button>)}</div></section>;
+function PeoplePalette({ people, blocks, highlightedPeople, onToggle, admin = false, onReorder }: { people: PublicPerson[]; blocks: BlockWithMember[]; highlightedPeople: Set<number>; onToggle: (personId: number) => void; admin?: boolean; onReorder?: (ids: number[]) => void }) {
+  const byId = useMemo(() => new Map(people.map((member) => [member.id, member])), [people]);
+  const serverOrder = useMemo(() => people.map((member) => member.id), [people]);
+  const [order, setOrder] = useState<number[]>(serverOrder);
+  const [dragId, setDragId] = useState<number | null>(null);
+  useEffect(() => setOrder(serverOrder), [serverOrder.join(",")]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const weeklyHours = useMemo(() => {
+    const totals = new Map<number, number>();
+    for (const { block, member } of blocks) totals.set(member.id, (totals.get(member.id) ?? 0) + (toMinutes(block.endTime) - toMinutes(block.startTime)) / 60);
+    return totals;
+  }, [blocks]);
+
+  const ordered = order.map((id) => byId.get(id)).filter((member): member is PublicPerson => Boolean(member));
+  for (const member of people) if (!order.includes(member.id)) ordered.push(member);
+
+  const persist = (ids: number[]) => { setOrder(ids); if (ids.join(",") !== serverOrder.join(",")) onReorder?.(ids); };
+  const dragOnto = (targetId: number) => {
+    if (dragId === null || dragId === targetId) return;
+    setOrder((current) => {
+      const next = current.filter((id) => id !== dragId);
+      const at = next.indexOf(targetId);
+      next.splice(at < 0 ? next.length : at, 0, dragId);
+      return next;
+    });
+  };
+  const sortAlpha = () => persist([...people].sort((a, b) => a.fullName.localeCompare(b.fullName)).map((member) => member.id));
+
+  return <section className="px-5 pb-10 pt-2 sm:px-10">
+    <div className="flex items-center justify-between">
+      <p className="font-display text-[10px] font-bold tracking-[.18em] text-ink/45">PEOPLE · HOURS THIS WEEK</p>
+      {admin ? <button type="button" onClick={sortAlpha} className="font-display text-[10px] font-bold tracking-[.14em] text-ink/40 transition hover:text-ink" title="Sort people A–Z">A–Z</button> : null}
+    </div>
+    <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-3">
+      {ordered.map((member) => {
+        const on = highlightedPeople.has(member.id);
+        const scheduled = weeklyHours.get(member.id) ?? 0;
+        const required = member.weeklyRequiredHours;
+        const delta = Math.round((scheduled - required) * 100) / 100;
+        const deltaLabel = required === 0 ? "no target" : delta === 0 ? "on target" : `${delta > 0 ? "+" : "−"}${formatHours(Math.abs(delta))}`;
+        const deltaClass = required === 0 ? "text-ink/40" : delta < 0 ? "text-coral" : "text-slate";
+        return <div
+          key={member.id}
+          draggable={admin}
+          onDragStart={admin ? (event) => { event.dataTransfer.effectAllowed = "move"; setDragId(member.id); } : undefined}
+          onDragOver={admin ? (event) => { event.preventDefault(); dragOnto(member.id); } : undefined}
+          onDrop={admin ? (event) => event.preventDefault() : undefined}
+          onDragEnd={admin ? () => { persist(order); setDragId(null); } : undefined}
+          onClick={() => onToggle(member.id)}
+          role="button"
+          tabIndex={0}
+          aria-pressed={on}
+          aria-label={`Highlight ${firstName(member.fullName)} — ${formatHours(scheduled)} of ${formatHours(required)} this week`}
+          className={`flex items-start gap-2.5 border px-3 py-2.5 text-left transition ${on ? "border-ink/25 bg-ink/[.04]" : "border-ink/12 bg-[#FFFDF9] hover:border-ink/25"} ${admin ? "cursor-grab active:cursor-grabbing" : "cursor-pointer"} ${dragId === member.id ? "opacity-40" : ""}`}
+        >
+          {admin ? <GripVertical size={13} className="mt-0.5 shrink-0 text-ink/25" aria-hidden="true" /> : null}
+          <span className="mt-0.5 h-3.5 w-3.5 shrink-0 rounded-[2px] transition" style={{ backgroundColor: on ? brighten(member.color) : member.color, boxShadow: on ? `0 0 0 1px ${brighten(member.color)}` : undefined }} />
+          <span className="min-w-0 flex-1">
+            <span className="block truncate font-display text-sm font-bold">{firstName(member.fullName)}</span>
+            <span className="mt-0.5 block font-display text-[11px] tabular-nums text-ink/55">{formatHours(scheduled)} / {formatHours(required)}</span>
+            <span className={`font-display text-[11px] font-bold tabular-nums ${deltaClass}`}>{deltaLabel}</span>
+          </span>
+        </div>;
+      })}
+    </div>
+  </section>;
 }
 
 function WeekDateBox({ day, date, selected, accent, onClick }: { day: string; date: Date; selected: boolean; accent: string; onClick: () => void }) {
@@ -401,6 +464,20 @@ export function PublicBoard({ today, now, people, blocks, openSessions, admin = 
       }
     });
   };
+  const reorderPalette = (ids: number[]) => {
+    if (!admin) return;
+    const form = new FormData();
+    form.set("ids", ids.join(","));
+    startSaving(async () => {
+      try {
+        await reorderPeople(form);
+        setNotice(null);
+        router.refresh();
+      } catch (error) {
+        setNotice(error instanceof Error ? error.message : "Could not save the new order.");
+      }
+    });
+  };
   const makeEditApi = (crossDay: boolean): BarEditApi => ({
     crossDay,
     isDirty: (id) => id < 0 || id in edits,
@@ -463,7 +540,7 @@ export function PublicBoard({ today, now, people, blocks, openSessions, admin = 
         <div className="pointer-events-none absolute inset-x-0 top-[390px] z-10 hidden justify-between lg:flex"><button type="button" onClick={() => shiftSelectedDate(-7)} className="pointer-events-auto flex h-10 w-10 items-center justify-center text-ink/35 transition hover:text-ink" aria-label="Previous week"><ChevronLeft size={21} strokeWidth={1.5} /></button><button type="button" onClick={() => shiftSelectedDate(7)} className="pointer-events-auto flex h-10 w-10 items-center justify-center text-ink/35 transition hover:text-ink" aria-label="Next week"><ChevronRight size={21} strokeWidth={1.5} /></button></div>
         <div className="hidden overflow-hidden lg:block"><div className="grid grid-cols-[52px_repeat(5,minmax(0,1fr))] divide-x divide-ink/15"><div className="flex items-center px-2 py-3 font-display text-[10px] font-bold tracking-[.18em] text-ink/55">TIME</div>{WEEKDAYS.slice(0, 5).map((day, index) => <WeekDateBox key={day} day={day} date={new Date(dateForDay(index))} selected={highlightedDays.has(index)} accent={monthAccent} onClick={() => toggleWeekday(index)} />)}<div><HourAxis short /></div>{WEEKDAYS.slice(0, 5).map((day, index) => <div key={`timeline-${day}`} className="relative min-w-0 px-1.5" style={highlightedDays.has(index) ? { backgroundColor: wash(monthAccent, .08) } : undefined}><DayTimeline entries={byDay[index]} accent={monthAccent} currentTime={dateValueForDay(index) === today ? clock : undefined} highlightedPeople={highlightedPeople} onToggle={togglePerson} edit={weekEditApi} weekday={index + 1} short /></div>)}</div></div>
         <div className="space-y-2 lg:hidden">{WEEKDAYS.slice(0, 5).map((day, index) => <div key={day} className="flex w-full items-stretch gap-2" style={highlightedDays.has(index) ? { backgroundColor: wash(monthAccent, .08) } : undefined}><WeekDateBox day={day} date={new Date(dateForDay(index))} selected={highlightedDays.has(index)} accent={monthAccent} onClick={() => toggleWeekday(index)} /><button onClick={() => setSelectedDateValue(dateValueForDay(index))} className="relative min-w-0 flex-1 px-1 text-left"><span className="relative block h-full min-h-12"><span className="absolute inset-y-0 left-0 right-0 flex items-end gap-px">{Array.from({ length: 48 }, (_, slot) => { const start = 7 * 60 + slot * 15; const count = byDay[index].filter(({ block }) => toMinutes(block.startTime) <= start && toMinutes(block.endTime) > start).length; return <i key={slot} className="flex-1 bg-slate" style={{ height: `${count ? Math.max(15, count * 24) : 0}%`, opacity: count ? .78 : 0 }} />; })}</span></span></button></div>)}</div>
-        <PeoplePalette people={people} highlightedPeople={highlightedPeople} onToggle={togglePerson} />
+        <PeoplePalette people={people} blocks={boardBlocks} highlightedPeople={highlightedPeople} onToggle={togglePerson} admin={admin} onReorder={reorderPalette} />
       </section>
       <footer className="flex flex-wrap items-center justify-between gap-3 bg-paper-deep px-5 py-4 font-display text-[10px] font-medium tracking-[.14em] text-ink/50 sm:px-10"><span>RABO.YANGRAN.ORG · © Yang Ran 2026</span><span className="flex flex-wrap items-center justify-end gap-4"><span>07:00–19:00 · AMERICA/NEW_YORK</span><a href="https://rabo.yangran.org/login" className="font-medium tracking-[.08em] text-ink/35 transition hover:text-coral">管理者ログイン</a></span></footer>
     </section>

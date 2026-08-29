@@ -1,0 +1,1 @@
+ALTER TABLE "person" ADD COLUMN "weekly_required_hours" integer DEFAULT 0 NOT NULL;
