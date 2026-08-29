@@ -2,7 +2,7 @@
 
 import { and, desc, eq, isNull, sql } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
-import { auth } from "@/auth";
+import { auth, signOut } from "@/auth";
 import { db } from "@/db";
 import { adminNote, blockAttendance, labSession, person, weeklyBlock } from "@/db/schema";
 import { getLabToday } from "@/lib/utils";
@@ -11,6 +11,12 @@ const requireAdmin = async () => {
   const session = await auth();
   if (!session?.user) throw new Error("You must be signed in.");
   return session;
+};
+
+// Ends the admin session and lands on the public board. Used by the header
+// "Log out" button and by the idle-timeout watcher in the admin shell.
+export const endAdminSession = async () => {
+  await signOut({ redirectTo: "/" });
 };
 
 const text = (data: FormData, name: string) => String(data.get(name) || "").trim();

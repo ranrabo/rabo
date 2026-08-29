@@ -10,7 +10,11 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
   ...authConfig,
   secret: process.env.AUTH_SECRET ?? process.env.NEXTAUTH_SECRET,
   trustHost: true,
-  session: { strategy: "jwt", maxAge: 12 * 60 * 60 },
+  // Admin sessions time out after 30 minutes of inactivity. updateAge re-signs
+  // the JWT (at most once a minute) whenever an authenticated request comes in,
+  // so real activity keeps it alive; the admin shell also runs a client-side
+  // idle watch that drops back to the public board on an untouched tab.
+  session: { strategy: "jwt", maxAge: 30 * 60, updateAge: 60 },
   providers: [
     Credentials({
       credentials: {
