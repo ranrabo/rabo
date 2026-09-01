@@ -64,18 +64,19 @@ export const getAdminToday = async () => {
 export const getReportData = async (from: string, to: string) => {
   const safeFrom = from || getMonday(getLabToday());
   const safeTo = to || addDays(safeFrom, 6);
+  // admin_only people (e.g. the full-time RA) are kept out of the hours tally.
   const [people, blocks, sessions] = await Promise.all([
-    db.select().from(person).orderBy(asc(person.sortOrder), asc(person.fullName)),
+    db.select().from(person).where(eq(person.adminOnly, false)).orderBy(asc(person.sortOrder), asc(person.fullName)),
     db
       .select({ block: weeklyBlock, member: person })
       .from(weeklyBlock)
       .innerJoin(person, eq(weeklyBlock.personId, person.id))
-      .where(and(lte(weeklyBlock.effectiveFrom, safeTo), or(isNull(weeklyBlock.effectiveTo), gte(weeklyBlock.effectiveTo, safeFrom)))),
+      .where(and(eq(person.adminOnly, false), lte(weeklyBlock.effectiveFrom, safeTo), or(isNull(weeklyBlock.effectiveTo), gte(weeklyBlock.effectiveTo, safeFrom)))),
     db
       .select({ session: labSession, member: person })
       .from(labSession)
       .innerJoin(person, eq(labSession.personId, person.id))
-      .where(and(gte(labSession.sessionDate, safeFrom), lte(labSession.sessionDate, safeTo)))
+      .where(and(eq(person.adminOnly, false), gte(labSession.sessionDate, safeFrom), lte(labSession.sessionDate, safeTo)))
       .orderBy(asc(labSession.sessionDate), asc(labSession.startTime)),
   ]);
   return { from: safeFrom, to: safeTo, people, blocks, sessions };
