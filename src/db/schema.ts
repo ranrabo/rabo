@@ -22,6 +22,9 @@ export const person = pgTable(
     color: text("color").notNull().default("#EE7E61"),
     researchArea: text("research_area").notNull(),
     active: boolean("active").notNull().default(true),
+    // Visible on the admin board but hidden from the public board (e.g. a
+    // full-time RA whose hours the lab tracks internally but doesn't publish).
+    adminOnly: boolean("admin_only").notNull().default(false),
     sortOrder: integer("sort_order").notNull().default(0),
     weeklyRequiredHours: integer("weekly_required_hours").notNull().default(0),
   },

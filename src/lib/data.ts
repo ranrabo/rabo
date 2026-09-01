@@ -13,17 +13,19 @@ const publicMember = {
   weeklyRequiredHours: person.weeklyRequiredHours,
 };
 
-export const getHomeData = async () => {
+export const getHomeData = async ({ admin = false }: { admin?: boolean } = {}) => {
   const today = getLabToday();
   const monday = getMonday(today);
   const sunday = addDays(monday, 6);
+  // The public board only shows people flagged admin_only when viewed from /admin.
+  const visible = admin ? eq(person.active, true) : and(eq(person.active, true), eq(person.adminOnly, false));
   const [people, blocks, openSessions, attendance] = await Promise.all([
-    db.select(publicMember).from(person).where(eq(person.active, true)).orderBy(asc(person.sortOrder), asc(person.fullName)),
+    db.select(publicMember).from(person).where(visible).orderBy(asc(person.sortOrder), asc(person.fullName)),
     db
       .select({ block: weeklyBlock, member: publicMember })
       .from(weeklyBlock)
       .innerJoin(person, eq(weeklyBlock.personId, person.id))
-      .where(and(eq(person.active, true), lte(weeklyBlock.effectiveFrom, sunday), or(isNull(weeklyBlock.effectiveTo), gte(weeklyBlock.effectiveTo, monday))))
+      .where(and(visible, lte(weeklyBlock.effectiveFrom, sunday), or(isNull(weeklyBlock.effectiveTo), gte(weeklyBlock.effectiveTo, monday))))
       .orderBy(asc(weeklyBlock.weekday), asc(weeklyBlock.startTime)),
     db
       .select({ session: labSession, member: publicMember })
