@@ -9,6 +9,7 @@ const publicMember = {
   researchArea: person.researchArea,
   color: person.color,
   active: person.active,
+  adminOnly: person.adminOnly,
   sortOrder: person.sortOrder,
   weeklyRequiredHours: person.weeklyRequiredHours,
 };

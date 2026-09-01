@@ -295,7 +295,10 @@ function TodayList({ entries, openSessions, highlightedPeople, onToggle }: { ent
   </div>;
 }
 
-function PeoplePalette({ people, blocks, highlightedPeople, onToggle, admin = false, onReorder, confirmedHours }: { people: PublicPerson[]; blocks: BlockWithMember[]; highlightedPeople: Set<number>; onToggle: (personId: number) => void; admin?: boolean; onReorder?: (ids: number[]) => void; confirmedHours?: Map<number, number> }) {
+function PeoplePalette({ people: roster, blocks, highlightedPeople, onToggle, admin = false, onReorder, confirmedHours }: { people: PublicPerson[]; blocks: BlockWithMember[]; highlightedPeople: Set<number>; onToggle: (personId: number) => void; admin?: boolean; onReorder?: (ids: number[]) => void; confirmedHours?: Map<number, number> }) {
+  // admin_only people (e.g. the full-time RA) still get timeline bars, but are
+  // kept out of this hours/colour roster entirely.
+  const people = useMemo(() => roster.filter((member) => !member.adminOnly), [roster]);
   const byId = useMemo(() => new Map(people.map((member) => [member.id, member])), [people]);
   const serverOrder = useMemo(() => people.map((member) => member.id), [people]);
   const [order, setOrder] = useState<number[]>(serverOrder);

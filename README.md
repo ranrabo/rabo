@@ -1,17 +1,40 @@
-# rabo / lab occupancy
+# rabo — lab space scheduling & coordination
 
-Rabo is a shared lab-room schedule and occupancy log. The public board shows the active team and weekly schedule.
+Rabo is a tool for managing a shared lab room: who is expected in the space, when,
+and who is actually there right now. It keeps a recurring weekly schedule per
+member, logs real time spent in the lab, and gives the group one place to
+coordinate hours and avoid clashes over the room.
 
-## What the app does
+The public board at `/` is a read-only weekly schedule with a daily view,
+calendar navigation, live open sessions, and member highlighting. Everything else
+lives behind an authenticated private area reached from `/login`; on an empty
+database the first visit creates the initial account (password of at least 12
+characters). The deployed entry point is `rabo.yangran.org`.
 
-- `/` — public read-only weekly schedule, daily view, calendar navigation, current open sessions, and member highlighting.
-- `/login` — sign-in entry point for the private area. On an empty database, the first visit can create the initial account with a password of at least 12 characters. The deployed entry point is `rabo.yangran.org/login`.
+The app uses `America/New_York` for “today” and the live clock. Schedule blocks
+use 15-minute increments between 07:00 and 19:00.
 
-The app uses `America/New_York` for “today” and the live clock. Schedule blocks use 15-minute increments between 07:00 and 19:00.
+## Tech stack
+
+| Area | Choice |
+| --- | --- |
+| Framework | Next.js 15 (App Router, React Server Components, Server Actions) on React 19 |
+| Language | TypeScript 5, `strict` mode, `@/*` path alias to `src/` |
+| Styling | Tailwind CSS v4 via `@tailwindcss/postcss` — CSS-first config (`@theme` in `src/app/globals.css`), no `tailwind.config`; Google Fonts (M PLUS 1, Newsreader, Zen Kaku Gothic New) |
+| UI | `lucide-react` icons, small local primitives in `src/components/ui/`, `clsx` + `tailwind-merge` for class composition |
+| Auth | Auth.js (`next-auth` v5) Credentials provider, JWT sessions with a 30-minute idle timeout, `bcryptjs` password hashing, middleware gate on `/admin/*` |
+| Database | PostgreSQL, hosted on Neon; accessed over the Neon serverless HTTP driver (`@neondatabase/serverless`) |
+| ORM / migrations | Drizzle ORM + Drizzle Kit (`db:push` / `db:generate`), schema in `src/db/schema.ts`, generated SQL in `drizzle/` |
+| Input handling | Server Actions with hand-rolled `FormData` parsing/validation helpers (`src/app/admin/actions.ts`); mutations write an append-only `admin_log` trail |
+| Tooling | ESLint (`eslint-config-next`), `tsx` for one-off DB scripts, `dotenv` for script env loading |
+| Hosting | Vercel; `serverActions.bodySizeLimit` raised to 2 MB in `next.config.ts` |
+
+There is also a standalone Python 3 utility (`scripts/mail_team.py`) that drives
+macOS Mail.app over AppleScript — see “Private macOS Mail utility” below.
 
 ## Local development
 
-Requirements: Node.js and a PostgreSQL-compatible database. Neon is supported and is the current hosted database provider, but any compatible PostgreSQL connection can be used for development.
+Requirements: Node.js 18.18 or newer and a PostgreSQL-compatible database. Neon is the current hosted provider, but any compatible PostgreSQL connection works for development.
 
 ```bash
 npm install
@@ -85,7 +108,7 @@ The repository’s generated SQL describes schema changes; the current package s
 
 ## Data model
 
-- `person` — member name, optional private email, color, research area, active flag, display order, and weekly required hours.
+- `person` — member name, optional private email, color, research area, active flag, admin-only flag (kept off the public board), display order, and weekly required hours.
 - `weekly_block` — recurring schedule blocks with weekday, time range, effective date range, edit version, and audit timestamps.
 - `block_attendance` — per-date attendance confirmations for recurring schedule blocks.
 - `lab_session` — admin-entered or quick-logged time in the lab.
@@ -115,10 +138,11 @@ Additional scripts are available for controlled maintenance:
 npx tsx src/db/set-person-active.ts "name or id" false
 npx tsx src/db/set-team-schedule.ts                 # dry run
 npx tsx src/db/set-team-schedule.ts --force         # apply planned schedule replacement
+npx tsx src/db/set-connor-schedule.ts --force       # rewrite one member's recurring blocks
 npx tsx src/db/reset-user.ts username password --force
 ```
 
-`set-team-schedule.ts` can target another env file and supports `--create-missing` and `--deactivate-others`. `reset-user.ts` is destructive for the `app_user` table and requires `--force`; inspect the target environment first.
+The schedule scripts (`set-team-schedule.ts`, `set-connor-schedule.ts`) print a plan first and only write with `--force`, and accept an alternate env file as the first argument; `set-team-schedule.ts` also supports `--create-missing` and `--deactivate-others`. `set-person-active.ts` applies immediately. `reset-user.ts` is destructive for the `app_user` table and requires `--force`; inspect the target environment first.
 
 ## Commands
 
@@ -131,8 +155,9 @@ npx tsx src/db/reset-user.ts username password --force
 
 ## Project layout
 
-- `src/app/` — Next.js routes, login, admin pages, and Auth.js handler
-- `src/components/` — public board, controls, UI components, and CSV export
-- `src/db/` — schema, seed, and maintenance scripts
+- `src/app/` — Next.js routes, the `/login` flow, and the Auth.js route handler
+- `src/components/` — board, controls, UI primitives, and CSV export
+- `src/db/` — Drizzle schema, seed, and maintenance scripts
 - `src/lib/` — data access and date/time helpers
+- `src/middleware.ts`, `src/auth.ts`, `src/auth.config.ts` — Auth.js wiring
 - `drizzle/` — generated PostgreSQL SQL and migration snapshots

@@ -159,7 +159,7 @@ export const progressEntryRelations = relations(progressEntry, ({ one }) => ({
 }));
 
 export type Person = typeof person.$inferSelect;
-export type PublicPerson = Pick<Person, "id" | "fullName" | "researchArea" | "active" | "sortOrder" | "color" | "weeklyRequiredHours">;
+export type PublicPerson = Pick<Person, "id" | "fullName" | "researchArea" | "active" | "adminOnly" | "sortOrder" | "color" | "weeklyRequiredHours">;
 export type WeeklyBlock = typeof weeklyBlock.$inferSelect;
 export type LabSession = typeof labSession.$inferSelect;
 export type ProgressEntry = typeof progressEntry.$inferSelect;
