@@ -88,23 +88,31 @@ def save_roster(path: Path, members: list[dict[str, str]]) -> None:
     write_private_json(path, {"members": members})
 
 
+def lookup_members(members: list[dict[str, str]], names: str) -> list[dict[str, str]]:
+    wanted = [item.strip().casefold() for item in names.split(",") if item.strip()]
+    by_name = {member["name"].casefold(): member for member in members}
+    missing = [item for item in wanted if item not in by_name]
+    if missing:
+        fail(f"Roster member not found: {', '.join(missing)}")
+    return [by_name[item] for item in wanted]
+
+
 def select_members(members: list[dict[str, str]], names: str | None, select_all: bool) -> list[dict[str, str]]:
     if select_all and names:
         fail("Use either --members or --all, not both.")
     if select_all:
         selected = members
     elif names:
-        wanted = [item.strip().casefold() for item in names.split(",") if item.strip()]
-        by_name = {member["name"].casefold(): member for member in members}
-        missing = [item for item in wanted if item not in by_name]
-        if missing:
-            fail(f"Roster member not found: {', '.join(missing)}")
-        selected = [by_name[item] for item in wanted]
+        selected = lookup_members(members, names)
     else:
         fail("Choose recipients with --members \"Name One,Name Two\" or --all.")
     if not selected:
         fail("No recipients selected.")
     return selected
+
+
+def select_cc(members: list[dict[str, str]], names: str | None) -> list[dict[str, str]]:
+    return lookup_members(members, names) if names else []
 
 
 def message_body(args: argparse.Namespace) -> str:
@@ -126,29 +134,34 @@ def apple_string(value: str) -> str:
     return f'"{escaped}"'
 
 
-def mail_script(subject: str, body: str, recipients: list[dict[str, str]], send: bool) -> str:
+def mail_script(subject: str, body: str, recipients: list[dict[str, str]], send: bool, cc: list[dict[str, str]] | None = None) -> str:
     recipient_lines = "\n".join(
         f"make new to recipient at end of to recipients with properties {{address:{apple_string(member['email'])}}}"
         for member in recipients
+    )
+    cc_lines = "\n".join(
+        f"make new cc recipient at end of cc recipients with properties {{address:{apple_string(member['email'])}}}"
+        for member in cc or []
     )
     action = "send newMessage" if send else "activate"
     return f'''tell application "Mail"
     set newMessage to make new outgoing message with properties {{subject:{apple_string(subject)}, content:{apple_string(body)}, visible:true}}
     tell newMessage
         {recipient_lines}
+        {cc_lines}
     end tell
     {action}
 end tell
 '''
 
 
-def open_in_mail(subject: str, body: str, recipients: list[dict[str, str]], send: bool) -> None:
+def open_in_mail(subject: str, body: str, recipients: list[dict[str, str]], send: bool, cc: list[dict[str, str]] | None = None) -> None:
     if sys.platform != "darwin":
         fail("Mail.app integration requires macOS.")
     try:
         result = subprocess.run(
             ["osascript", "-"],
-            input=mail_script(subject, body, recipients, send),
+            input=mail_script(subject, body, recipients, send, cc),
             text=True,
             capture_output=True,
             timeout=30,
@@ -172,7 +185,7 @@ def draft_path(value: str) -> Path:
     return path
 
 
-def save_draft(subject: str, body: str, recipients: list[dict[str, str]], status: str = "draft", path: Path | None = None) -> Path:
+def save_draft(subject: str, body: str, recipients: list[dict[str, str]], status: str = "draft", path: Path | None = None, cc: list[dict[str, str]] | None = None) -> Path:
     now = datetime.now(timezone.utc).isoformat()
     payload = {
         "id": str(uuid.uuid4()),
@@ -180,6 +193,7 @@ def save_draft(subject: str, body: str, recipients: list[dict[str, str]], status
         "subject": subject,
         "body": body,
         "recipients": recipients,
+        "cc": cc or [],
         "createdAt": now,
         "updatedAt": now,
     }
@@ -243,11 +257,12 @@ def command_remove(args: argparse.Namespace) -> None:
 def command_compose(args: argparse.Namespace) -> None:
     members = load_roster(roster_path(args))
     recipients = select_members(members, args.members, args.all)
+    cc = select_cc(members, args.cc)
     body = message_body(args)
     if args.send and not args.confirm_send:
         fail("Direct sending requires both --send and --confirm-send.")
-    path = save_draft(args.subject, body, recipients)
-    open_in_mail(args.subject, body, recipients, send=args.send)
+    path = save_draft(args.subject, body, recipients, cc=cc)
+    open_in_mail(args.subject, body, recipients, send=args.send, cc=cc)
     if args.send:
         draft = load_draft(path)
         draft["status"] = "sent"
@@ -260,7 +275,7 @@ def command_open(args: argparse.Namespace) -> None:
     path = draft_path(args.draft)
     draft = load_draft(path)
     recipients = draft["recipients"]
-    open_in_mail(str(draft["subject"]), str(draft["body"]), recipients, send=False)
+    open_in_mail(str(draft["subject"]), str(draft["body"]), recipients, send=False, cc=draft.get("cc", []))
     print(f"Opened draft in Mail.app: {path}")
 
 
@@ -269,7 +284,7 @@ def command_send(args: argparse.Namespace) -> None:
         fail("Direct sending requires --confirm-send.")
     path = draft_path(args.draft)
     draft = load_draft(path)
-    open_in_mail(str(draft["subject"]), str(draft["body"]), draft["recipients"], send=True)
+    open_in_mail(str(draft["subject"]), str(draft["body"]), draft["recipients"], send=True, cc=draft.get("cc", []))
     draft["status"] = "sent"
     draft["updatedAt"] = datetime.now(timezone.utc).isoformat()
     write_private_json(path, draft)
@@ -308,6 +323,7 @@ def build_parser() -> argparse.ArgumentParser:
     add_roster_arg(compose)
     compose.add_argument("--members", help="Comma-separated roster names")
     compose.add_argument("--all", action="store_true", help="Use every roster member")
+    compose.add_argument("--cc", help="Comma-separated roster names to copy")
     compose.add_argument("--subject", required=True)
     compose.add_argument("--body")
     compose.add_argument("--body-file")
