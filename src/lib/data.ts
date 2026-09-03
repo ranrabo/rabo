@@ -14,9 +14,13 @@ const publicMember = {
   weeklyRequiredHours: person.weeklyRequiredHours,
 };
 
-export const getHomeData = async ({ admin = false }: { admin?: boolean } = {}) => {
+export const getHomeData = async ({ admin = false, weekOf }: { admin?: boolean; weekOf?: string } = {}) => {
   const today = getLabToday();
-  const monday = getMonday(today);
+  // The board can page to any week. `weekOf` (the date it is currently showing)
+  // decides which week's blocks and attendance to load; everything else — the
+  // clock, who is in the lab right now — stays anchored to the real today.
+  const anchor = weekOf && /^\d{4}-\d{2}-\d{2}$/.test(weekOf) ? weekOf : today;
+  const monday = getMonday(anchor);
   const sunday = addDays(monday, 6);
   // The public board only shows people flagged admin_only when viewed from /admin.
   const visible = admin ? eq(person.active, true) : and(eq(person.active, true), eq(person.adminOnly, false));

@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
+import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Check, ChevronLeft, ChevronRight, GripVertical, Pencil, Trash2, X } from "lucide-react";
 import type { PublicPerson, WeeklyBlock } from "@/db/schema";
@@ -604,37 +604,11 @@ export function PublicBoard({ today, now, people, blocks, openSessions, attendan
   const tempIdRef = useRef(-1);
 
   // Attendance is confirmed per (block, calendar date). The board can page to any
-  // week, so confirmed-state is tracked per week and keyed off the week actually
-  // on screen — not whatever week "today" happens to fall in.
-  const initialWeekMonday = useMemo(() => getMonday(today), [today]);
+  // week; getHomeData reloads the blocks and attendance rows for whichever week
+  // is on screen (via the ?d= param), so this keys off the displayed week.
   const selectedWeekMonday = useMemo(() => getMonday(selectedDateValue), [selectedDateValue]);
-  const [attendanceByWeek, setAttendanceByWeek] = useState<Record<string, { weeklyBlockId: number; attendDate: string }[]>>(
-    () => ({ [initialWeekMonday]: attendance }),
-  );
-  // Keep the current week's slice in step with the server prop after a refresh.
-  useEffect(() => {
-    setAttendanceByWeek((current) => ({ ...current, [initialWeekMonday]: attendance }));
-  }, [attendance, initialWeekMonday]);
-  const loadWeekAttendance = useCallback((monday: string) => {
-    return fetch(`/api/admin/attendance?monday=${monday}`, { cache: "no-store" })
-      .then((response) => (response.ok ? response.json() : { attendance: [] }))
-      .then((data) => {
-        const rows: { weeklyBlockId: number; attendDate: string }[] = Array.isArray(data?.attendance) ? data.attendance : [];
-        setAttendanceByWeek((current) => ({ ...current, [monday]: rows }));
-      })
-      .catch(() => {});
-  }, []);
-  // Pull attendance for any week the admin pages to that isn't loaded yet.
-  useEffect(() => {
-    if (!admin || attendanceByWeek[selectedWeekMonday]) return;
-    loadWeekAttendance(selectedWeekMonday);
-  }, [admin, selectedWeekMonday, attendanceByWeek, loadWeekAttendance]);
-
   const attendDateForWeekday = (weekday: number) => addDays(selectedWeekMonday, weekday - 1);
-  const confirmedSet = useMemo(
-    () => new Set((attendanceByWeek[selectedWeekMonday] ?? []).map((row) => `${row.weeklyBlockId}:${row.attendDate}`)),
-    [attendanceByWeek, selectedWeekMonday],
-  );
+  const confirmedSet = useMemo(() => new Set(attendance.map((row) => `${row.weeklyBlockId}:${row.attendDate}`)), [attendance]);
   useEffect(() => {
     setConfirmOverride((current) => {
       const next: Record<string, boolean> = {};
@@ -708,7 +682,6 @@ export function PublicBoard({ today, now, people, blocks, openSessions, attendan
     const saved = entries.find((entry) => entry.block.id === id);
     const key = attendKeyFor(id);
     if (!saved || !key) return;
-    const targetWeekMonday = selectedWeekMonday;
     const date = attendDateForWeekday(saved.block.weekday);
     const next = !isConfirmed(id);
     setConfirmOverride((current) => ({ ...current, [key]: next }));
@@ -720,8 +693,7 @@ export function PublicBoard({ today, now, people, blocks, openSessions, attendan
       try {
         if (next) await confirmAttendance(form); else await clearAttendance(form);
         setNotice(null);
-        if (targetWeekMonday === initialWeekMonday) router.refresh();
-        await loadWeekAttendance(targetWeekMonday);
+        router.refresh();
       } catch (error) {
         setConfirmOverride((current) => { const clone = { ...current }; delete clone[key]; return clone; });
         setNotice(error instanceof Error ? error.message : "Could not update attendance.");
