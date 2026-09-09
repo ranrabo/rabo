@@ -139,10 +139,12 @@ npx tsx src/db/set-person-active.ts "name or id" false
 npx tsx src/db/set-team-schedule.ts                 # dry run
 npx tsx src/db/set-team-schedule.ts --force         # apply planned schedule replacement
 npx tsx src/db/set-connor-schedule.ts --force       # rewrite one member's recurring blocks
+npx tsx src/db/set-crosby-schedule.ts --force       # same, with a mid-term cutover date
+npx tsx src/db/set-hayden-schedule.ts --force       # same, with a mid-term cutover date
 npx tsx src/db/reset-user.ts username password --force
 ```
 
-The schedule scripts (`set-team-schedule.ts`, `set-connor-schedule.ts`) print a plan first and only write with `--force`, and accept an alternate env file as the first argument; `set-team-schedule.ts` also supports `--create-missing` and `--deactivate-others`. `set-person-active.ts` applies immediately. `reset-user.ts` is destructive for the `app_user` table and requires `--force`; inspect the target environment first.
+The schedule scripts (`set-team-schedule.ts`, `set-connor-schedule.ts`, `set-crosby-schedule.ts`, `set-hayden-schedule.ts`) print a plan first and only write with `--force`, and accept an alternate env file as the first argument; `set-team-schedule.ts` also supports `--create-missing` and `--deactivate-others`. The per-member cutover scripts (`set-crosby-schedule.ts`, `set-hayden-schedule.ts`) leave history intact: blocks already running are capped the day before the cutover, future recurring blocks are replaced, and single-day one-off blocks an admin added for a specific date are left alone. `set-person-active.ts` applies immediately. `reset-user.ts` is destructive for the `app_user` table and requires `--force`; inspect the target environment first.
 
 ## Commands
 
