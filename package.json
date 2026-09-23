@@ -17,7 +17,7 @@
     "clsx": "latest",
     "drizzle-orm": "latest",
     "lucide-react": "latest",
-    "next": "15.5.7",
+    "next": "15.5.26",
     "next-auth": "beta",
     "react": "19.1.0",
     "react-dom": "19.1.0",
@@ -32,10 +32,14 @@
     "dotenv": "^17.4.2",
     "drizzle-kit": "latest",
     "eslint": "latest",
-    "eslint-config-next": "15.5.7",
-    "postcss": "latest",
+    "eslint-config-next": "15.5.26",
+    "postcss": "^8.5.28",
     "tailwindcss": "latest",
     "tsx": "latest",
     "typescript": "latest"
+  },
+  "overrides": {
+    "sharp": "^0.35.4",
+    "postcss": "^8.5.28"
   }
 }
