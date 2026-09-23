@@ -36,7 +36,7 @@ type Slot = [Day, string, string];
 // First name as typed by the lab -> recurring slots (start/end, 24h, 15-min grid).
 const SCHEDULE: Record<string, Slot[]> = {
   Alexis: [["Tue", "08:00", "13:00"], ["Thu", "08:00", "13:00"]],
-  Asher: [["Mon", "13:00", "16:00"], ["Wed", "13:00", "16:00"], ["Fri", "13:00", "16:00"]],
+  Asher: [["Wed", "13:00", "15:00"], ["Fri", "13:00", "15:00"]],
   Crosby: [["Mon", "12:00", "15:00"], ["Tue", "10:00", "13:00"], ["Wed", "13:00", "15:00"]],
   Emmett: [["Mon", "15:00", "17:00"], ["Tue", "14:00", "16:00"], ["Thu", "14:00", "16:00"]],
   Erica: [["Tue", "08:00", "11:00"], ["Thu", "08:00", "11:00"]],
