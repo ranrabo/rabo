@@ -8,6 +8,7 @@ import type { PublicPerson, WeeklyBlock } from "@/db/schema";
 import { addDays, firstName, formatHours, formatTime, getMonday, toMinutes, WEEKDAYS } from "@/lib/utils";
 import { isTermOver, labStatusFor } from "@/lib/term";
 import { quoteForDate } from "@/lib/quotes";
+import { occursInWeek } from "@/lib/schedule";
 import { addScheduleBlock, clearAttendance, confirmAttendance, createWeeklyBlock, deleteWeeklyBlock, reorderPeople, saveAdminNote, updateWeeklyBlock } from "@/app/admin/actions";
 
 type BlockWithMember = { block: WeeklyBlock; member: PublicPerson };
@@ -659,15 +660,15 @@ export function PublicBoard({ today, now, people, blocks, openSessions, attendan
   });
 
   const boardBlocks = useMemo<BlockWithMember[]>(() => {
-    if (!admin) return blocks;
+    if (!admin) return blocks.filter(({ block }) => occursInWeek(block, selectedWeekMonday));
     return entries.map((entry) => {
       const pos = posFor(entry.block);
       const personId = edits[entry.block.id]?.personId ?? entry.block.personId;
       const member = personId === entry.block.personId ? entry.member : (people.find((person) => person.id === personId) ?? entry.member);
       return { member, block: { ...entry.block, personId, weekday: pos.weekday, startTime: toTime(pos.start), endTime: toTime(pos.end) } };
-    });
+    }).filter(({ block }) => block.id < 0 || occursInWeek(block, selectedWeekMonday));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [admin, entries, edits, blocks, people]);
+  }, [admin, entries, edits, blocks, people, selectedWeekMonday]);
 
   const attendKeyFor = (id: number): string | null => {
     const saved = entries.find((entry) => entry.block.id === id);
