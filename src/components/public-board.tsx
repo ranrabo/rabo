@@ -410,7 +410,7 @@ function AdminPopover({ blockId, entry, people, isNew, busy, onAssign, onRemove,
   return <>
     <div className="fixed inset-0 z-40" onPointerDown={onClose} aria-hidden="true" />
     {pos ? <div className="fixed z-50 rounded-md border border-ink/15 bg-[#FFFDF9] p-2.5 shadow-[0_12px_40px_rgba(43,41,38,.2)]" style={{ left: pos.left, top: pos.top, width: WIDTH }} role="dialog" aria-label="Block settings">
-      <p className="font-display text-[9px] font-bold uppercase tracking-[.16em] text-ink/45">{isNew ? "New block" : "Edit block"}</p>
+      <p className="font-display text-[9px] font-bold uppercase tracking-[.16em] text-ink/45">{isNew ? "New block · day only" : "Edit block · day only"}</p>
       <label className="mt-1.5 block text-[10px] font-medium text-ink/55" htmlFor="admin-popover-person">Person</label>
       <select id="admin-popover-person" value={entry.block.personId} disabled={busy} onChange={(event) => onAssign(Number(event.target.value))} className="mt-1 w-full rounded border border-ink/20 bg-white px-1.5 py-1 font-display text-[11px] font-bold text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-aqua">
         {people.map((member) => <option key={member.id} value={member.id}>{member.fullName}</option>)}
@@ -482,6 +482,7 @@ function ScheduleControl({ people, today, selectedDateValue, selectedDay, dayEnt
   const [end, setEnd] = useState("12:00");
   const [scope, setScope] = useState<"day" | "term">("day");
   const [removeId, setRemoveId] = useState("");
+  const [removeScope, setRemoveScope] = useState<"day" | "term">("day");
   const [busy, setBusy] = useState(false);
 
   const isNew = personId === "new" || !people.length;
@@ -516,6 +517,8 @@ function ScheduleControl({ people, today, selectedDateValue, selectedDay, dayEnt
     const entry = removable.find((item) => String(item.block.id) === removeId);
     const form = new FormData();
     form.set("id", removeId);
+    form.set("scope", removeScope);
+    form.set("date", selectedDateValue);
     if (entry) form.set("version", String(entry.block.version));
     setBusy(true);
     run(async () => {
@@ -571,8 +574,12 @@ function ScheduleControl({ people, today, selectedDateValue, selectedDay, dayEnt
             {removable.map((entry) => <option key={entry.block.id} value={entry.block.id}>{firstName(entry.member.fullName)} · {formatTime(entry.block.startTime)}–{formatTime(entry.block.endTime)}</option>)}
           </select>
         </div>
+        <div className="space-y-1">
+          <label className="flex items-center gap-2 font-display text-[11px] text-ink/70"><input type="radio" name="remove-scope" checked={removeScope === "day"} onChange={() => setRemoveScope("day")} className="accent-slate" /> {dayText} only</label>
+          <label className="flex items-center gap-2 font-display text-[11px] text-ink/70"><input type="radio" name="remove-scope" checked={removeScope === "term"} onChange={() => setRemoveScope("term")} className="accent-slate" /> All weeks in this recurring block</label>
+        </div>
         <button type="button" disabled={busy || !removeId} onClick={remove} className="flex w-full items-center justify-center gap-1.5 border border-coral/40 px-3 py-2 font-display text-[11px] font-bold uppercase tracking-[.12em] text-coral transition hover:bg-coral/10 disabled:opacity-40"><Trash2 size={12} /> Remove block</button>
-        <p className="font-display text-[9px] leading-relaxed text-ink/40">Removes the recurring slot from the team schedule.</p>
+        <p className="font-display text-[9px] leading-relaxed text-ink/40">{removeScope === "day" ? `Removes this block on ${dayText} only. Other weeks stay unchanged.` : "Removes the selected recurring block across its entire date range, including past weeks."}</p>
       </div>}
     </div>
   </div>;
@@ -661,12 +668,12 @@ export function PublicBoard({ today, now, people, blocks, openSessions, attendan
 
   const boardBlocks = useMemo<BlockWithMember[]>(() => {
     if (!admin) return blocks.filter(({ block }) => occursInWeek(block, selectedWeekMonday));
-    return entries.map((entry) => {
+    return entries.filter(({ block }) => block.id < 0 || occursInWeek(block, selectedWeekMonday)).map((entry) => {
       const pos = posFor(entry.block);
       const personId = edits[entry.block.id]?.personId ?? entry.block.personId;
       const member = personId === entry.block.personId ? entry.member : (people.find((person) => person.id === personId) ?? entry.member);
       return { member, block: { ...entry.block, personId, weekday: pos.weekday, startTime: toTime(pos.start), endTime: toTime(pos.end) } };
-    }).filter(({ block }) => block.id < 0 || occursInWeek(block, selectedWeekMonday));
+    });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [admin, entries, edits, blocks, people, selectedWeekMonday]);
 
@@ -780,7 +787,7 @@ export function PublicBoard({ today, now, people, blocks, openSessions, attendan
     form.set("weekday", String(pos.weekday));
     form.set("startTime", toTime(pos.start));
     form.set("endTime", toTime(pos.end));
-    form.set("effectiveFrom", entry.block.effectiveFrom || today);
+    form.set("date", addDays(selectedWeekMonday, (id < 0 ? pos.weekday : entry.block.weekday) - 1));
     setSavingIds((current) => new Set(current).add(id));
     startSaving(async () => {
       try {
@@ -813,6 +820,7 @@ export function PublicBoard({ today, now, people, blocks, openSessions, attendan
     if (id < 0) { revertBlock(id); return; }
     const entry = entries.find((item) => item.block.id === id);
     const form = new FormData();
+    if (entry) form.set("date", addDays(selectedWeekMonday, entry.block.weekday - 1));
     form.set("id", String(id));
     if (entry) form.set("version", String(entry.block.version));
     setSavingIds((current) => new Set(current).add(id));

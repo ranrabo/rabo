@@ -14,6 +14,13 @@ characters). The deployed entry point is `rabo.yangran.org`.
 The app uses `America/New_York` for “today” and the live clock. Schedule blocks
 use 15-minute increments between 07:00 and 19:00.
 
+Direct block edits (drag, resize, or reassignment), drawn blocks, and default
+removals apply only to the displayed date. Edits preserve the recurring hours
+and attendance on all other dates. Use the Schedule panel’s explicit ongoing
+option for recurring additions, or its all-weeks option to remove an entire
+recurring block. Moving or reassigning a confirmed occurrence clears that
+occurrence’s confirmation so it can be confirmed for the new day or person.
+
 ## Tech stack
 
 | Area | Choice |
@@ -150,6 +157,7 @@ The schedule scripts (`set-team-schedule.ts`, `set-connor-schedule.ts`, `set-cro
 ## Commands
 
 - `npm run dev` — start local development
+- `npm test` — run schedule regression tests against an isolated in-memory PostgreSQL database
 - `npm run build` — create a production build
 - `npm run start` — serve the production build
 - `npm run db:generate` — generate a new Drizzle SQL migration from schema changes

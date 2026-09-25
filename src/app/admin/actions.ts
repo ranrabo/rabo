@@ -1,13 +1,14 @@
 "use server";
 
 import type { Session } from "next-auth";
-import { and, desc, eq, isNull, sql } from "drizzle-orm";
+import { and, desc, eq, isNull } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { auth, signOut } from "@/auth";
 import { db } from "@/db";
 import { adminLog, adminNote, blockAttendance, labSession, person, weeklyBlock } from "@/db/schema";
 import { getLabToday, WEEKDAYS } from "@/lib/utils";
 import { upcomingTermSegments } from "@/lib/term";
+import { changeOccurrenceQuery, occurrenceDate } from "@/db/schedule-occurrence";
 
 type AdminSession = Session | null;
 
@@ -90,8 +91,10 @@ const STALE_MESSAGE = "This block changed since you opened it. Refresh and try a
 export const createWeeklyBlock = async (formData: FormData) => {
   const session = await requireAdmin();
   const fields = scheduleFields(formData);
-  await db.insert(weeklyBlock).values({ ...fields, loggedBy: session.user?.name || "Admin" });
-  await logAdmin(session, "block.add", `added ${await nameOf(fields.personId)} · ${WEEKDAYS[fields.weekday - 1]} ${fields.startTime}–${fields.endTime}`);
+  const date = occurrenceDate(text(formData, "date"));
+  if (weekdayOf(date) !== fields.weekday) throw new Error("The block date and weekday must match.");
+  await db.insert(weeklyBlock).values({ ...fields, effectiveFrom: date, effectiveTo: date, loggedBy: actorOf(session) });
+  await logAdmin(session, "block.add", `added ${await nameOf(fields.personId)} · ${date} ${fields.startTime}–${fields.endTime}`);
   refresh();
 };
 
@@ -153,14 +156,11 @@ export const updateWeeklyBlock = async (formData: FormData) => {
   if (!Number.isInteger(id) || id < 1) throw new Error("Choose a valid schedule block.");
   const fields = scheduleFields(formData);
   const version = expectedVersion(formData);
-  const where = version === null ? eq(weeklyBlock.id, id) : and(eq(weeklyBlock.id, id), eq(weeklyBlock.version, version));
-  const saved = await db
-    .update(weeklyBlock)
-    .set({ ...fields, loggedBy: session.user?.name || "Admin", updatedAt: new Date(), version: sql`${weeklyBlock.version} + 1` })
-    .where(where)
-    .returning({ id: weeklyBlock.id });
-  if (!saved.length) throw new Error(STALE_MESSAGE);
-  await logAdmin(session, "block.edit", `edited ${await nameOf(fields.personId)} · ${WEEKDAYS[fields.weekday - 1]} ${fields.startTime}–${fields.endTime}`);
+  if (version === null) throw new Error(STALE_MESSAGE);
+  const date = occurrenceDate(text(formData, "date"));
+  const saved = await db.execute(changeOccurrenceQuery(id, version, date, actorOf(session), fields));
+  if (!saved.rows.length) throw new Error(STALE_MESSAGE);
+  await logAdmin(session, "block.edit", `edited ${await nameOf(fields.personId)} · occurrence ${date} only → ${WEEKDAYS[fields.weekday - 1]} ${fields.startTime}–${fields.endTime}`);
   refresh();
 };
 
@@ -170,10 +170,20 @@ export const deleteWeeklyBlock = async (formData: FormData) => {
   if (!Number.isInteger(id) || id < 1) throw new Error("Choose a valid schedule block.");
   const label = await blockLabel(id);
   const version = expectedVersion(formData);
-  const where = version === null ? eq(weeklyBlock.id, id) : and(eq(weeklyBlock.id, id), eq(weeklyBlock.version, version));
-  const removed = await db.delete(weeklyBlock).where(where).returning({ id: weeklyBlock.id });
-  if (!removed.length) throw new Error(STALE_MESSAGE);
-  await logAdmin(session, "block.remove", `removed ${label}`);
+  if (version === null) throw new Error(STALE_MESSAGE);
+  if (text(formData, "scope") === "term") {
+    const removed = await db.delete(weeklyBlock)
+      .where(and(eq(weeklyBlock.id, id), eq(weeklyBlock.version, version)))
+      .returning({ id: weeklyBlock.id });
+    if (!removed.length) throw new Error(STALE_MESSAGE);
+    await logAdmin(session, "block.remove", `removed ${label} · all weeks in recurring block`);
+    refresh();
+    return;
+  }
+  const date = occurrenceDate(text(formData, "date"));
+  const removed = await db.execute(changeOccurrenceQuery(id, version, date, actorOf(session), null));
+  if (!removed.rows.length) throw new Error(STALE_MESSAGE);
+  await logAdmin(session, "block.remove", `removed ${label} · ${date} only`);
   refresh();
 };
 
