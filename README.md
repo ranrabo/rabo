@@ -21,6 +21,26 @@ option for recurring additions, or its all-weeks option to remove an entire
 recurring block. Moving or reassigning a confirmed occurrence clears that
 occurrence’s confirmation so it can be confirmed for the new day or person.
 
+## Schedule updates — September 24, 2026
+
+The following recurring hours were verified on the deployed board. All times
+are in `America/New_York`; the live database is the source of truth.
+
+| Member | Monday | Tuesday | Wednesday | Thursday | Friday | Effective date |
+| --- | --- | --- | --- | --- | --- | --- |
+| Emmett | 3–5 PM | 3–5 PM | — | 3–5 PM | — | Tuesday/Thursday change effective September 9, 2026; Monday unchanged by this repair |
+| Asher | 2–4 PM | — | 1–3 PM | — | 1–3 PM | Monday added effective September 24, 2026, first occurrence September 28; Wednesday/Friday unchanged |
+
+Emmett's September 9 change had already been applied, but subsequent removals
+on September 10 and 11 deleted the fall Thursday and Tuesday recurring blocks.
+The missing 3–5 PM blocks were restored through December 13; his spring blocks
+already had the correct hours. The activity log does not establish whether
+those removals were intended for individual dates or the whole recurring series.
+
+Asher's Monday hours were added across his existing fall and spring schedule
+ranges. Both updates preserved existing blocks, attendance records, and the
+winter break, and were recorded in `admin_log`.
+
 ## Tech stack
 
 | Area | Choice |
@@ -153,6 +173,12 @@ npx tsx src/db/reset-user.ts username password --force
 ```
 
 The schedule scripts (`set-team-schedule.ts`, `set-connor-schedule.ts`, `set-crosby-schedule.ts`, `set-hayden-schedule.ts`, `set-asher-schedule.ts`) print a plan first and only write with `--force`, and accept an alternate env file as the first argument; `set-team-schedule.ts` also supports `--create-missing` and `--deactivate-others`. The per-member cutover scripts (`set-crosby-schedule.ts`, `set-hayden-schedule.ts`, `set-asher-schedule.ts`) leave history intact: blocks already running are capped the day before the cutover, future recurring blocks are replaced, and single-day one-off blocks an admin added for a specific date are left alone. `set-person-active.ts` applies immediately. `reset-user.ts` is destructive for the `app_user` table and requires `--force`; inspect the target environment first.
+
+These scripts contain historical schedule snapshots, not an automatically
+updated copy of the live schedule. In particular, `set-team-schedule.ts` still
+contains Emmett's old Tuesday/Thursday hours and omits Asher's new Monday slot;
+`set-asher-schedule.ts` also omits that Monday slot. Review and update their
+plans before running them again, or they can overwrite the corrections above.
 
 ## Commands
 
